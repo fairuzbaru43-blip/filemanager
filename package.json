@@ -1,0 +1,19 @@
+{
+  "name": "file-manager-drive",
+  "version": "1.0.0",
+  "private": true,
+  "description": "File Manager bersama dengan Google Drive dan login username/password",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node scripts/dev-server.js"
+  },
+  "dependencies": {
+    "@upstash/ratelimit": "^2.2.0",
+    "@upstash/redis": "^1.39.0",
+    "bcryptjs": "^2.4.3",
+    "googleapis": "^186.0.0",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2563eb">
+  <title>DriveBox — File Manager</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="loginView" class="login-wrap">
+    <form id="loginForm" class="login-card">
+      <div class="brand-mark">D</div>
+      <h1>DriveBox</h1>
+      <p class="muted">File manager bersama</p>
+      <label for="username">Username</label>
+      <input id="username" name="username" autocomplete="username" required maxlength="100">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="200">
+      <button class="primary full" type="submit">Masuk</button>
+      <p id="loginMessage" class="message" role="status"></p>
+    </form>
+  </main>
+
+  <div id="appView" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark small">D</span><strong>DriveBox</strong></div>
+      <button id="homeBtn" class="nav-item active">▦ &nbsp; Semua file</button>
+      <div class="sidebar-note">Penyimpanan bersama<br><span>Google Drive</span></div>
+      <button id="logoutBtn" class="nav-item logout">↪ &nbsp; Keluar</button>
+    </aside>
+    <section class="main">
+      <header class="topbar">
+        <div><h1>File Manager</h1><p class="muted">Kelola file bersama dalam satu tempat.</p></div>
+        <span id="userBadge" class="user-badge">Pengguna</span>
+      </header>
+      <div class="toolbar">
+        <input id="searchInput" class="search" type="search" placeholder="Cari file atau folder..." aria-label="Cari file">
+        <div class="actions">
+          <button id="newFolderBtn" class="secondary">＋ Folder</button>
+          <label class="primary upload-label">↑ Upload<input id="uploadInput" type="file" hidden></label>
+        </div>
+      </div>
+      <div id="breadcrumbs" class="breadcrumbs"></div>
+      <div id="notice" class="notice hidden" role="status"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nama</th><th>Jenis</th><th>Ukuran</th><th>Terakhir diubah</th><th>Aksi</th></tr></thead>
+          <tbody id="fileRows"><tr><td colspan="5" class="empty">Memuat file...</td></tr></tbody>
+        </table>
+      </div>
+      <p class="footnote">File disimpan di Google Drive yang telah dihubungkan oleh administrator.</p>
+    </section>
+  </div>
+  <script src="app.js" defer></script>
+</body>
+</html>
