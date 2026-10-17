@@ -54,7 +54,12 @@ test("auth configuration reports missing names and Redis sessions revoke logout 
 
     Redis.fromEnv = () => ({
       async set(key, value) { sessions.set(key, value); return "OK"; },
-      async get(key) { return sessions.get(key) ?? null; },
+      async get(key) {
+        const value = sessions.get(key);
+        if (value === undefined) return null;
+        // Match @upstash/redis default JSON response parsing (GET "1" => number 1).
+        try { return JSON.parse(value); } catch { return value; }
+      },
       async del(key) { return sessions.delete(key) ? 1 : 0; }
     });
 
@@ -75,7 +80,7 @@ test("auth configuration reports missing names and Redis sessions revoke logout 
     const secureRequest = { headers: { "x-forwarded-proto": "https" }, socket: {} };
     await setSession(secureRequest, loginResponse, process.env.APP_USERNAME);
     assert.match(loginResponse.headers["Set-Cookie"], /HttpOnly/);
-    assert.match(loginResponse.headers["Set-Cookie"], /SameSite=Strict/);
+    assert.match(loginResponse.headers["Set-Cookie"], /SameSite=Lax/);
     assert.match(loginResponse.headers["Set-Cookie"], /Max-Age=28800/);
     assert.match(loginResponse.headers["Set-Cookie"], /; Secure/);
 
@@ -85,6 +90,7 @@ test("auth configuration reports missing names and Redis sessions revoke logout 
 
     const logoutResponse = response();
     await clearSession({ headers: { cookie: `fm_session=${token}`, "x-forwarded-proto": "https" }, socket: {} }, logoutResponse);
+    assert.match(logoutResponse.headers["Set-Cookie"], /SameSite=Lax/);
     assert.match(logoutResponse.headers["Set-Cookie"], /Max-Age=0/);
     assert.match(logoutResponse.headers["Set-Cookie"], /; Secure/);
     assert.equal(sessions.size, 0);
@@ -92,6 +98,11 @@ test("auth configuration reports missing names and Redis sessions revoke logout 
     const revoked = response();
     assert.equal(await requireAuth({ headers: { cookie: `fm_session=${token}` }, socket: {} }, revoked), null);
     assert.equal(revoked.statusCode, 401);
+
+    const localLoginResponse = response();
+    await setSession({ headers: {}, socket: {} }, localLoginResponse, process.env.APP_USERNAME);
+    assert.match(localLoginResponse.headers["Set-Cookie"], /SameSite=Lax/);
+    assert.doesNotMatch(localLoginResponse.headers["Set-Cookie"], /; Secure/);
   } finally {
     Redis.fromEnv = originalFromEnv;
     for (const [name, value] of Object.entries(originalEnvironment)) {

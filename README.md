@@ -4,7 +4,7 @@ Starter project untuk belajar HTML, CSS, JavaScript, Node.js API, login username
 
 ## Fitur
 - Login username/password dengan hash bcrypt.
-- Sesi JWT di cookie HttpOnly, SameSite=Strict, Secure saat production, dengan pencabutan sesi di Upstash Redis saat logout.
+- Sesi JWT di cookie HttpOnly, SameSite=Lax, Secure saat production, dengan pencabutan sesi di Upstash Redis saat logout.
 - Pembatasan login lintas instance dengan Upstash Redis: 20 percobaan per alamat IP dan 5 percobaan per akun/IP dalam 15 menit.
 - Daftar file/folder, navigasi folder, pencarian pada folder aktif.
 - Buat folder, upload file, download, dan pindahkan file ke Sampah.
@@ -79,6 +79,8 @@ Masukkan password baru saat diminta, lalu salin baris `APP_PASSWORD_HASH=...` ke
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
+
+Pertahankan `SESSION_SECRET` tetap sama untuk semua function dan deployment instance pada environment Vercel yang sama. Jangan membuatnya ulang setiap request atau setiap deployment; mengganti nilainya akan membatalkan sesi aktif.
 
 - Di Windows PowerShell, buat file lokal dengan `Copy-Item .env.example .env.local`, lalu isi `.env.local` melalui VS Code.
 - Isi `APP_PASSWORD_HASH` dengan hasil bcrypt dan `SESSION_SECRET` dengan hasil `randomBytes` tersebut. Perubahan `SESSION_SECRET` akan membatalkan seluruh sesi yang sedang aktif.

@@ -1,4 +1,4 @@
-const { setSession, verifyPassword } = require("../lib/auth");
+const { setSession, verifyPassword, logAuthError } = require("../lib/auth");
 const { getAuthConfigurationError } = require("../lib/configuration");
 const { createHash } = require("node:crypto");
 const { Ratelimit } = require("@upstash/ratelimit");
@@ -54,8 +54,8 @@ module.exports = async (req, res) => {
     await setSession(req, res, username);
     res.setHeader("Cache-Control", "no-store");
     return res.status(200).json({ ok: true, username });
-  } catch {
-    console.error("Login failed because authentication or rate limiting is unavailable.");
+  } catch (error) {
+    logAuthError("Login request failed.", error);
     return res.status(503).json({ error: "Layanan login sementara tidak tersedia. Periksa konfigurasi autentikasi dan rate limiting." });
   }
 };
