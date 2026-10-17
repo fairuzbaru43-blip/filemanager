@@ -3,6 +3,7 @@ let currentParent = null;
 let rootId = null;
 let allFiles = [];
 let crumbs = [];
+let authFlowVersion = 0;
 
 async function api(path, options = {}) {
   const res = await fetch(`/api/${path}`, {
@@ -27,19 +28,30 @@ function showLogin() { $("loginView").classList.remove("hidden"); $("appView").c
 function showApp(username) { $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden"); $("userBadge").textContent = username; }
 
 async function checkSession() {
-  try { const me = await api("me"); showApp(me.username); await loadFiles(null, true); }
+  const version = authFlowVersion;
+  try {
+    const me = await api("me");
+    if (version !== authFlowVersion) return;
+    showApp(me.username); await loadFiles(null, true);
+  }
   catch (e) {
+    if (version !== authFlowVersion) return;
     showLogin();
     if (e.status === 503) $("loginMessage").textContent = e.message;
   }
 }
 $("loginForm").addEventListener("submit", async (event) => {
-  event.preventDefault(); $("loginMessage").textContent = "Memeriksa...";
+  event.preventDefault();
+  const version = ++authFlowVersion;
+  $("loginMessage").textContent = "Memeriksa...";
   try {
     const data = await api("login", { method: "POST", body: JSON.stringify({ username: $("username").value.trim(), password: $("password").value }) });
+    if (version !== authFlowVersion) return;
     $("password").value = ""; $("loginMessage").textContent = "";
     showApp(data.username); await loadFiles(null, true);
-  } catch (e) { $("loginMessage").textContent = e.message; }
+  } catch (e) {
+    if (version === authFlowVersion) $("loginMessage").textContent = e.message;
+  }
 });
 $("logoutBtn").addEventListener("click", async () => {
   try {
@@ -89,7 +101,9 @@ async function loadFiles(parentId = null, reset = false) {
     if (reset || !parentId) crumbs = [{ id: rootId, name: "Semua file" }];
     renderCrumbs(); renderFiles();
   } catch (e) {
-    if (/login|sesi/i.test(e.message)) showLogin();
+    if (/login|sesi/i.test(e.message)) {
+      showLogin(); $("loginMessage").textContent = e.message;
+    }
     else showNotice(e.message, true);
   }
 }
