@@ -64,13 +64,15 @@ UPSTASH_REDIS_REST_TOKEN=REPLACE_WITH_UPSTASH_REST_TOKEN
 - `GOOGLE_SERVICE_ACCOUNT_JSON` harus berupa JSON satu baris yang valid. Pastikan karakter newline dalam `private_key` direpresentasikan sebagai `\n`.
 - `UPSTASH_REDIS_REST_URL` harus berupa URL HTTPS REST Upstash. Jangan menambahkan tanda kutip atau spasi pada nilai-nilai environment.
 - `APP_USERNAME` adalah username admin; `APP_PASSWORD_HASH` hanya menerima hash bcrypt yang valid dengan cost minimal 10.
-- Buat hash password dengan perintah berikut:
+- Buat hash bcrypt cost 12 dari PowerShell pada folder proyek. Ketikan password tidak ditampilkan:
 
-```bash
-node -e "const rl=require('node:readline').createInterface({input:process.stdin,output:process.stdout}); rl.question('Password: ', p => { console.log(require('bcryptjs').hashSync(p, 12)); rl.close(); })"
+Pastikan terminal berada di folder proyek `file-manager-drive` (folder yang berisi `package.json`). Jika terminal masih di folder induk workspace, jalankan `cd .\file-manager-drive` terlebih dahulu. Kemudian jalankan:
+
+```powershell
+node scripts/generate-password-hash.js
 ```
 
-Masukkan password pilihanmu saat diminta, lalu salin hasil hash ke `APP_PASSWORD_HASH`. Jangan simpan password asli di file proyek.
+Masukkan password baru saat diminta, lalu salin baris `APP_PASSWORD_HASH=...` ke Vercel. Jangan kirim atau simpan password maupun hash di chat atau file proyek.
 - Pilih password sepanjang maksimal 72 byte UTF-8 (batas bcrypt).
 - Buat secret sesi dengan:
 
