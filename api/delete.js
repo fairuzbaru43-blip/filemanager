@@ -4,7 +4,7 @@ const { sendDriveError } = require("../lib/drive-error-response");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "Metode tidak diizinkan." });
-  if (!requireAuth(req, res)) return;
+  if (!await requireAuth(req, res)) return;
   try {
     const { id } = req.body || {};
     if (typeof id !== "string" || !id || id === rootFolderId()) return res.status(400).json({ error: "ID file tidak valid." });

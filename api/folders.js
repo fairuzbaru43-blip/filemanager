@@ -4,7 +4,7 @@ const { sendDriveError } = require("../lib/drive-error-response");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "Metode tidak diizinkan." });
-  if (!requireAuth(req, res)) return;
+  if (!await requireAuth(req, res)) return;
   try {
     const { name, parentId } = req.body || {};
     if (typeof name !== "string" || !name.trim() || name.length > 100 || /[\u0000-\u001f\u007f]/.test(name)) {

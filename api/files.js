@@ -4,7 +4,7 @@ const { sendDriveError } = require("../lib/drive-error-response");
 
 module.exports = async (req, res) => {
   if (req.method !== "GET") return res.status(405).json({ error: "Metode tidak diizinkan." });
-  if (!requireAuth(req, res)) return;
+  if (!await requireAuth(req, res)) return;
   try {
     const drive = getDrive();
     if (req.query.parentId !== undefined && typeof req.query.parentId !== "string") {

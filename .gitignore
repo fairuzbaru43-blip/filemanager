@@ -4,4 +4,10 @@ node_modules/
 .env.*
 !.env.example
 .vercel
+*.pem
+*.key
+service-account*.json
+google-service-account*.json
+*-service-account*.json
+credentials*.json
 .DS_Store

@@ -17,7 +17,7 @@ const exportsByMimeType = {
 
 module.exports = async (req, res) => {
   if (req.method !== "GET") return res.status(405).json({ error: "Metode tidak diizinkan." });
-  if (!requireAuth(req, res)) return;
+  if (!await requireAuth(req, res)) return;
   try {
     const id = req.query.id;
     if (typeof id !== "string" || !id) return res.status(400).json({ error: "ID file wajib diisi." });

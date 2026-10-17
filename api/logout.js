@@ -1,6 +1,10 @@
 const { clearSession } = require("../lib/auth");
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "Metode tidak diizinkan." });
-  clearSession(res);
-  return res.status(200).json({ ok: true });
+  try {
+    await clearSession(req, res);
+    return res.status(200).json({ ok: true });
+  } catch {
+    return res.status(503).json({ error: "Sesi tidak dapat dicabut saat ini. Coba lagi." });
+  }
 };

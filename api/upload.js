@@ -7,7 +7,7 @@ const MAX_BYTES = 3 * 1024 * 1024;
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "Metode tidak diizinkan." });
-  if (!requireAuth(req, res)) return;
+  if (!await requireAuth(req, res)) return;
   try {
     const { name, mimeType, data, parentId } = req.body || {};
     if (typeof name !== "string" || !name.trim() || name.length > 200 ||

@@ -51,7 +51,7 @@ module.exports = async (req, res) => {
     const usernameOk = username === process.env.APP_USERNAME;
     const passwordOk = await verifyPassword(password);
     if (!usernameOk || !passwordOk) return res.status(401).json({ error: "Username atau password salah." });
-    setSession(res, username);
+    await setSession(req, res, username);
     res.setHeader("Cache-Control", "no-store");
     return res.status(200).json({ ok: true, username });
   } catch {
