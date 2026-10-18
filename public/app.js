@@ -389,10 +389,6 @@ function renderFiles() {
       }
       if (file.webViewLink) { const open = document.createElement("button"); open.className = "small-action"; open.textContent = "Drive"; open.addEventListener("click", () => window.open(file.webViewLink, "_blank", "noopener,noreferrer")); actions.append(open); }
     } else {
-      const download = document.createElement("button"); download.className = "small-action"; download.textContent = "Unduh ZIP";
-      download.title = "Unduh folder beserta isinya sebagai arsip ZIP";
-      download.addEventListener("click", () => { window.location.href = `/api/download?id=${encodeURIComponent(file.id)}`; });
-      actions.append(download);
       const rename = document.createElement("button"); rename.className = "small-action"; rename.textContent = "Ganti nama";
       rename.addEventListener("click", () => renameItem(file));
       actions.append(rename);
