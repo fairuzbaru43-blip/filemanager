@@ -3,6 +3,7 @@ const { getDrive, ensureFileInApp } = require("../lib/drive");
 const { InvalidInputError } = require("../lib/configuration");
 const { sendDriveError } = require("../lib/drive-error-response");
 const { Readable } = require("node:stream");
+const { finished } = require("node:stream/promises");
 const { createZipStream } = require("../lib/zip-stream");
 
 const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
@@ -184,7 +185,14 @@ async function downloadFolderZip(drive, meta, res) {
     fileStreams.cancel();
     if (!res.writableEnded && !zipStream.destroyed) zipStream.destroy();
   });
+  const responseFinished = finished(res);
   zipStream.pipe(res);
+  try {
+    await responseFinished;
+  } catch (error) {
+    fileStreams.cancel();
+    if (!res.destroyed) throw error;
+  }
 }
 
 module.exports = async (req, res) => {
