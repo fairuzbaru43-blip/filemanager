@@ -282,6 +282,38 @@ tr:last-child td {
   font-size: 12px;
   margin: 2px;
 }
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 210px;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #dce3ed;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgb(15 23 42 / 18%);
+}
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 9px 11px;
+  background: transparent;
+  color: #243047;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+}
+.context-menu-item:hover,
+.context-menu-item:focus-visible {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.context-menu-separator {
+  height: 1px;
+  margin: 5px 4px;
+  background: #e8edf4;
+}
 .delete-action {
   background: #fff1f0;
   color: #b42318;

@@ -4,6 +4,7 @@ let rootId = null;
 let allFiles = [];
 let crumbs = [];
 let authFlowVersion = 0;
+let clipboardItem = null;
 
 async function api(path, options = {}) {
   const res = await fetch(`/api/${path}`, {
@@ -24,6 +25,72 @@ function showNotice(text, error = false) {
   if (error) el.classList.add("error");
 }
 function clearNotice() { $("notice").classList.add("hidden"); }
+function hideContextMenu() { $("contextMenu").classList.add("hidden"); }
+function addContextAction(menu, label, action) {
+  const button = document.createElement("button");
+  button.type = "button"; button.className = "context-menu-item"; button.textContent = label;
+  button.setAttribute("role", "menuitem");
+  button.addEventListener("click", async () => { hideContextMenu(); await action(); });
+  menu.append(button);
+}
+function addContextSeparator(menu) {
+  const separator = document.createElement("div"); separator.className = "context-menu-separator";
+  menu.append(separator);
+}
+function showContextMenu(event, file = null) {
+  event.preventDefault();
+  const menu = $("contextMenu");
+  menu.replaceChildren();
+  const folder = file?.mimeType === "application/vnd.google-apps.folder";
+  const destinationId = folder ? file.id : (currentParent || rootId);
+
+  if (file) {
+    addContextAction(menu, "Ganti nama", () => renameItem(file));
+    addContextAction(menu, "Copy", () => {
+      clipboardItem = { action: "copy", id: file.id, name: file.name };
+      showNotice(`"${file.name}" disiapkan untuk disalin. Klik kanan lokasi tujuan lalu pilih Tempel.`);
+    });
+    addContextAction(menu, "Cut", () => {
+      clipboardItem = { action: "cut", id: file.id, name: file.name };
+      showNotice(`"${file.name}" disiapkan untuk dipindahkan. Klik kanan folder tujuan lalu pilih Tempel.`);
+    });
+    if (clipboardItem) addContextSeparator(menu);
+  }
+  if (clipboardItem) {
+    addContextAction(menu, `Paste "${clipboardItem.name}" di sini`, () => pasteClipboard(destinationId));
+  }
+  if (!menu.childElementCount) return;
+
+  menu.classList.remove("hidden");
+  const bounds = menu.getBoundingClientRect();
+  const left = Math.max(8, Math.min(event.clientX, window.innerWidth - bounds.width - 8));
+  const top = Math.max(8, Math.min(event.clientY, window.innerHeight - bounds.height - 8));
+  menu.style.left = `${left}px`; menu.style.top = `${top}px`;
+}
+async function renameItem(file) {
+  const proposedName = prompt("Nama baru:", file.name);
+  if (proposedName === null) return;
+  const name = proposedName.trim();
+  if (!name || name === file.name) return;
+  try {
+    await api("rename", { method: "POST", body: JSON.stringify({ id: file.id, name }) });
+    await loadFiles(currentParent);
+    showNotice("Nama berhasil diubah.");
+  } catch (e) { showNotice(e.message, true); }
+}
+async function pasteClipboard(parentId) {
+  if (!clipboardItem || !parentId) return;
+  const pending = clipboardItem;
+  try {
+    await api(pending.action === "cut" ? "move" : "copy", {
+      method: "POST",
+      body: JSON.stringify({ id: pending.id, parentId })
+    });
+    if (pending.action === "cut" && clipboardItem === pending) clipboardItem = null;
+    await loadFiles(currentParent);
+    showNotice(pending.action === "cut" ? "Item berhasil dipindahkan." : "Item berhasil disalin.");
+  } catch (e) { showNotice(e.message, true); }
+}
 function showLogin() { $("loginView").classList.remove("hidden"); $("appView").classList.add("hidden"); }
 function showApp(username) { $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden"); $("userBadge").textContent = username; }
 
@@ -87,6 +154,11 @@ $("uploadInput").addEventListener("change", async (event) => {
   finally { event.target.value = ""; }
 });
 $("searchInput").addEventListener("input", renderFiles);
+document.querySelector(".table-wrap").addEventListener("contextmenu", event => showContextMenu(event));
+document.addEventListener("click", event => {
+  if (!$("contextMenu").contains(event.target)) hideContextMenu();
+});
+document.addEventListener("keydown", event => { if (event.key === "Escape") hideContextMenu(); });
 
 async function loadFiles(parentId = null, reset = false) {
   clearNotice();
@@ -131,6 +203,9 @@ function renderFiles() {
   for (const file of items) {
     const folder = file.mimeType === "application/vnd.google-apps.folder";
     const tr = document.createElement("tr");
+    tr.addEventListener("contextmenu", event => {
+      event.stopPropagation(); showContextMenu(event, file);
+    });
     const nameCell = document.createElement("td"), wrap = document.createElement("div"), icon = document.createElement("span");
     wrap.className = "file-name"; icon.className = "file-icon"; icon.textContent = folder ? "📁" : "📄";
     wrap.append(icon);
@@ -160,16 +235,7 @@ function renderFiles() {
       if (file.webViewLink) { const open = document.createElement("button"); open.className = "small-action"; open.textContent = "Drive"; open.addEventListener("click", () => window.open(file.webViewLink, "_blank", "noopener,noreferrer")); actions.append(open); }
     } else {
       const rename = document.createElement("button"); rename.className = "small-action"; rename.textContent = "Ganti nama";
-      rename.addEventListener("click", async () => {
-        const proposedName = prompt("Nama folder baru:", file.name);
-        if (proposedName === null) return;
-        const name = proposedName.trim();
-        if (!name || name === file.name) return;
-        try {
-          await api("rename", { method: "POST", body: JSON.stringify({ id: file.id, name }) });
-          showNotice("Nama folder berhasil diubah."); await loadFiles(currentParent);
-        } catch (e) { showNotice(e.message, true); }
-      });
+      rename.addEventListener("click", () => renameItem(file));
       actions.append(rename);
     }
     const del = document.createElement("button"); del.className = "small-action delete-action"; del.textContent = "Hapus";
