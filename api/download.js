@@ -165,7 +165,7 @@ async function downloadFolderZip(drive, meta, res) {
   res.setHeader("Content-Type", "application/zip");
   res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(zipName)}`);
 
-  const zipStream = Readable.from(createZipStream(context.entries, entry => fileStreams.open(entry)));
+  const zipStream = Readable.from(createZipStream(context.entries, entry => fileStreams.open(entry)), { objectMode: false });
   zipStream.on("error", error => {
     fileStreams.cancel();
     if (res.headersSent) {
