@@ -293,6 +293,65 @@ button {
   border-radius: 14px;
   overflow: auto;
 }
+.file-browser {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  align-items: start;
+  gap: 16px;
+}
+.file-details {
+  min-width: 0;
+  padding: 20px;
+  background: white;
+  border: 1px solid #e5eaf2;
+  border-radius: 14px;
+}
+.file-details h2 {
+  margin: 0;
+  color: #748096;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.file-details-name {
+  margin: 20px 0;
+  overflow-wrap: anywhere;
+  color: #1f2937;
+  font-size: 18px;
+}
+.file-details-empty {
+  margin: 18px 0 0;
+  color: #8a94a6;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.file-details-item {
+  display: grid;
+  gap: 5px;
+  padding: 12px 0;
+  border-top: 1px solid #edf0f5;
+  font-size: 12px;
+}
+.file-details-item span {
+  color: #8a94a6;
+}
+.file-details-item strong {
+  overflow-wrap: anywhere;
+  color: #334155;
+  font-weight: 600;
+}
+.file-details-open,
+.file-details-download {
+  width: 100%;
+  margin-top: 10px;
+}
+tbody tr {
+  cursor: pointer;
+}
+tbody tr:hover td,
+tbody tr.selected td {
+  background: #f3f7ff;
+}
 #appView {
   position: relative;
 }
@@ -474,5 +533,10 @@ tr:last-child td {
   }
   .table-wrap {
     border-radius: 10px;
+  }
+}
+@media (max-width: 1100px) {
+  .file-browser {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

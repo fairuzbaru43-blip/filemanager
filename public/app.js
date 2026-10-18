@@ -2,6 +2,7 @@ const $ = (id) => document.getElementById(id);
 let currentParent = null;
 let rootId = null;
 let allFiles = [];
+let selectedFileId = null;
 let crumbs = [];
 let sortOrder = "name-asc";
 const nameCollator = new Intl.Collator("id", { numeric: true, sensitivity: "base" });
@@ -430,6 +431,7 @@ document.addEventListener("keydown", event => { if (event.key === "Escape") hide
 
 async function loadFiles(parentId = null, reset = false) {
   clearNotice();
+  if (reset || (parentId && parentId !== currentParent)) selectedFileId = null;
   const tbody = $("fileRows");
   tbody.replaceChildren();
   const loading = document.createElement("tr"), loadingCell = document.createElement("td");
@@ -527,10 +529,26 @@ function renderFiles() {
   const tbody = $("fileRows"); tbody.replaceChildren();
   const query = $("searchInput").value.trim().toLowerCase();
   const items = allFiles.filter(f => f.name.toLowerCase().includes(query)).sort(compareFiles);
-  if (!items.length) { const tr = document.createElement("tr"), td = document.createElement("td"); td.colSpan = 5; td.className = "empty"; td.textContent = query ? "File tidak ditemukan." : "Folder ini masih kosong."; tr.append(td); tbody.append(tr); return; }
+  if (!items.length) {
+    const tr = document.createElement("tr"), td = document.createElement("td");
+    td.colSpan = 5; td.className = "empty"; td.textContent = query ? "File tidak ditemukan." : "Folder ini masih kosong.";
+    tr.append(td); tbody.append(tr); renderFileDetails(); return;
+  }
   for (const file of items) {
     const folder = file.mimeType === "application/vnd.google-apps.folder";
     const tr = document.createElement("tr");
+    if (selectedFileId === file.id) tr.classList.add("selected");
+    tr.addEventListener("click", event => {
+      if (event.target.closest(".small-action")) return;
+      tbody.querySelector("tr.selected")?.classList.remove("selected");
+      selectedFileId = file.id;
+      tr.classList.add("selected");
+      renderFileDetails();
+    });
+    tr.addEventListener("dblclick", event => {
+      if (event.target.closest(".small-action")) return;
+      openFile(file);
+    });
     tr.addEventListener("contextmenu", event => {
       event.stopPropagation(); showContextMenu(event, file);
     });
@@ -539,10 +557,6 @@ function renderFiles() {
     wrap.append(icon);
     if (folder) {
       const btn = document.createElement("button"); btn.className = "folder-name"; btn.textContent = file.name;
-      btn.addEventListener("click", () => {
-        crumbs.push({ id: file.id, name: file.name });
-        loadFiles(file.id);
-      });
       wrap.append(btn);
     } else { const span = document.createElement("span"); span.textContent = file.name; wrap.append(span); }
     nameCell.append(wrap); tr.append(nameCell);
@@ -581,6 +595,91 @@ function renderFiles() {
     const del = document.createElement("button"); del.className = "small-action delete-action"; del.textContent = "Hapus";
     del.addEventListener("click", () => deleteItem(file));
     actions.append(del); tr.append(actions); tbody.append(tr);
+  }
+  renderFileDetails();
+}
+function openFile(file) {
+  if (file.mimeType === "application/vnd.google-apps.folder") {
+    crumbs.push({ id: file.id, name: file.name });
+    loadFiles(file.id);
+    return;
+  }
+  if (!file.webViewLink) {
+    showNotice(`File "${file.name}" tidak memiliki tautan untuk dibuka.`, true);
+    return;
+  }
+  window.open(file.webViewLink, "_blank", "noopener,noreferrer");
+}
+function renderFileDetails() {
+  const panel = $("fileDetails");
+  panel.replaceChildren();
+  const title = document.createElement("h2");
+  title.textContent = "Detail file";
+  panel.append(title);
+
+  const file = allFiles.find(item => item.id === selectedFileId);
+  if (!file) {
+    selectedFileId = null;
+    const empty = document.createElement("p");
+    empty.className = "file-details-empty";
+    empty.textContent = "Pilih file atau folder untuk melihat detailnya.";
+    panel.append(empty);
+    return;
+  }
+
+  const folder = file.mimeType === "application/vnd.google-apps.folder";
+  const name = document.createElement("h3");
+  name.className = "file-details-name";
+  name.textContent = file.name;
+  panel.append(name);
+  const metadata = [
+    ["Jenis", folder ? "Folder" : (file.mimeType || "File").split("/").pop()],
+    ["Ukuran", folder ? "—" : formatSize(file.size)],
+    ["Terakhir diubah", file.modifiedTime ? new Date(file.modifiedTime).toLocaleString("id-ID") : "—"]
+  ];
+  for (const [label, value] of metadata) {
+    const item = document.createElement("div");
+    item.className = "file-details-item";
+    const key = document.createElement("span");
+    key.textContent = label;
+    const detail = document.createElement("strong");
+    detail.textContent = value;
+    item.append(key, detail);
+    panel.append(item);
+  }
+  if (folder) {
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "primary file-details-open";
+    open.textContent = "Buka folder";
+    open.addEventListener("click", () => openFile(file));
+    panel.append(open);
+  } else {
+    if (file.webViewLink) {
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "primary file-details-open";
+      open.textContent = "Buka di Google Drive";
+      open.addEventListener("click", () => openFile(file));
+      panel.append(open);
+    }
+    const nativeGoogleFile = file.mimeType.startsWith("application/vnd.google-apps.");
+    const canExport = [
+      "application/vnd.google-apps.document",
+      "application/vnd.google-apps.spreadsheet",
+      "application/vnd.google-apps.presentation",
+      "application/vnd.google-apps.drawing"
+    ].includes(file.mimeType);
+    if (!nativeGoogleFile || canExport) {
+      const download = document.createElement("button");
+      download.type = "button";
+      download.className = "secondary file-details-download";
+      download.textContent = "Unduh";
+      download.addEventListener("click", () => {
+        window.location.href = `/api/download?id=${encodeURIComponent(file.id)}`;
+      });
+      panel.append(download);
+    }
   }
 }
 checkSession();

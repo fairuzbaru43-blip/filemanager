@@ -56,11 +56,17 @@
       <p class="drop-hint">Seret file atau folder dari File Explorer ke halaman ini untuk upload. Maksimal 1 GB per file.</p>
       <div id="breadcrumbs" class="breadcrumbs"></div>
       <div id="notice" class="notice hidden" role="status"></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Nama</th><th>Jenis</th><th>Ukuran</th><th>Terakhir diubah</th><th>Aksi</th></tr></thead>
-          <tbody id="fileRows"><tr><td colspan="5" class="empty">Memuat file...</td></tr></tbody>
-        </table>
+      <div class="file-browser">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nama</th><th>Jenis</th><th>Ukuran</th><th>Terakhir diubah</th><th>Aksi</th></tr></thead>
+            <tbody id="fileRows"><tr><td colspan="5" class="empty">Memuat file...</td></tr></tbody>
+          </table>
+        </div>
+        <aside id="fileDetails" class="file-details" aria-live="polite">
+          <h2>Detail file</h2>
+          <p class="file-details-empty">Pilih file atau folder untuk melihat detailnya.</p>
+        </aside>
       </div>
       <p class="footnote">File disimpan di Google Drive yang telah dihubungkan oleh administrator.</p>
     </section>
