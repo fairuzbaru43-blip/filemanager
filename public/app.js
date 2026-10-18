@@ -5,6 +5,8 @@ let allFiles = [];
 let crumbs = [];
 let sortOrder = "name-asc";
 const nameCollator = new Intl.Collator("id", { numeric: true, sensitivity: "base" });
+let folderTreeCache = new Map();
+let expandedFolderIds = new Set();
 let authFlowVersion = 0;
 let clipboardItem = null;
 let currentRole = null;
@@ -282,6 +284,10 @@ function hasDraggedFiles(event) {
 }
 function showLogin() { $("loginView").classList.remove("hidden"); $("appView").classList.add("hidden"); }
 function showApp(username, role) {
+  if (currentRole !== role) {
+    folderTreeCache = new Map();
+    expandedFolderIds = new Set();
+  }
   currentRole = role;
   $("loginView").classList.add("hidden");
   $("appView").classList.remove("hidden");
@@ -388,8 +394,9 @@ async function loadFiles(parentId = null, reset = false) {
   try {
     const data = await api("files" + (parentId ? `?parentId=${encodeURIComponent(parentId)}` : ""));
     rootId = data.rootId; currentParent = parentId || rootId; allFiles = data.files || [];
+    folderTreeCache.set(currentParent, allFiles.filter(file => file.mimeType === "application/vnd.google-apps.folder"));
     if (reset || !parentId) crumbs = [{ id: rootId, name: "Semua file" }];
-    renderCrumbs(); renderFiles();
+    renderCrumbs(); renderFiles(); renderFolderTree();
     return true;
   } catch (e) {
     if (/login|sesi/i.test(e.message)) {
@@ -397,6 +404,78 @@ async function loadFiles(parentId = null, reset = false) {
     }
     else showNotice(e.message, true);
     return false;
+  }
+}
+function renderFolderTree() {
+  const tree = $("folderTree");
+  tree.replaceChildren();
+  $("homeBtn").classList.toggle("active", currentParent === rootId);
+  if (!rootId) return;
+  const rootFolders = folderTreeCache.get(rootId) || [];
+  if (!rootFolders.length) {
+    const empty = document.createElement("div");
+    empty.className = "folder-tree-empty";
+    empty.textContent = "Belum ada folder";
+    tree.append(empty);
+    return;
+  }
+  renderFolderBranch(rootId, [], 0, tree);
+}
+function renderFolderBranch(parentId, ancestors, depth, container) {
+  const folders = (folderTreeCache.get(parentId) || []).slice().sort((a, b) => nameCollator.compare(a.name, b.name));
+  for (const folder of folders) {
+    const row = document.createElement("div");
+    row.className = "folder-tree-row";
+    row.style.paddingLeft = `${depth * 14}px`;
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "folder-tree-toggle";
+    toggle.textContent = expandedFolderIds.has(folder.id) ? "▾" : "▸";
+    toggle.setAttribute("aria-label", `${expandedFolderIds.has(folder.id) ? "Tutup" : "Buka"} folder ${folder.name}`);
+    toggle.addEventListener("click", () => toggleFolderBranch(folder));
+    row.append(toggle);
+
+    const name = document.createElement("button");
+    name.type = "button";
+    name.className = "folder-tree-name";
+    if (currentParent === folder.id) name.classList.add("selected");
+    name.textContent = folder.name;
+    name.title = folder.name;
+    name.addEventListener("click", () => {
+      expandedFolderIds.add(folder.id);
+      crumbs = [{ id: rootId, name: "Semua file" }, ...ancestors, { id: folder.id, name: folder.name }];
+      loadFiles(folder.id);
+    });
+    row.append(name);
+    container.append(row);
+
+    if (expandedFolderIds.has(folder.id)) {
+      const children = document.createElement("div");
+      children.className = "folder-tree-children";
+      container.append(children);
+      renderFolderBranch(folder.id, [...ancestors, { id: folder.id, name: folder.name }], depth + 1, children);
+    }
+  }
+}
+async function toggleFolderBranch(folder) {
+  if (expandedFolderIds.has(folder.id)) {
+    expandedFolderIds.delete(folder.id);
+    renderFolderTree();
+    return;
+  }
+  try {
+    if (!folderTreeCache.has(folder.id)) {
+      const data = await api(`files?parentId=${encodeURIComponent(folder.id)}`);
+      folderTreeCache.set(folder.id, (data.files || []).filter(file => file.mimeType === "application/vnd.google-apps.folder"));
+    }
+    expandedFolderIds.add(folder.id);
+    renderFolderTree();
+  } catch (e) {
+    if (/login|sesi/i.test(e.message)) {
+      showLogin();
+      $("loginMessage").textContent = e.message;
+    } else showNotice(e.message, true);
   }
 }
 function renderCrumbs() {
@@ -456,7 +535,11 @@ function renderFiles() {
     wrap.append(icon);
     if (folder) {
       const btn = document.createElement("button"); btn.className = "folder-name"; btn.textContent = file.name;
-      btn.addEventListener("click", () => { crumbs.push({ id: file.id, name: file.name }); loadFiles(file.id); });
+      btn.addEventListener("click", () => {
+        expandedFolderIds.add(file.id);
+        crumbs.push({ id: file.id, name: file.name });
+        loadFiles(file.id);
+      });
       wrap.append(btn);
     } else { const span = document.createElement("span"); span.textContent = file.name; wrap.append(span); }
     nameCell.append(wrap); tr.append(nameCell);
