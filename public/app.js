@@ -104,6 +104,126 @@ async function pasteClipboard(parentId) {
     showNotice(pending.action === "cut" ? "Item berhasil dipindahkan." : "Item berhasil disalin.");
   } catch (e) { showNotice(e.message, true); }
 }
+const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const comma = result.indexOf(",");
+      if (comma < 0) reject(new Error("Gagal membaca file."));
+      else resolve(result.slice(comma + 1));
+    };
+    reader.onerror = () => reject(new Error("Gagal membaca file."));
+    reader.readAsDataURL(file);
+  });
+}
+async function uploadFileToDrive(file, parentId) {
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error("Ukuran maksimal 3 MB per file.");
+  const data = await readFileAsBase64(file);
+  await api("upload", {
+    method: "POST",
+    body: JSON.stringify({
+      name: file.name,
+      mimeType: file.type || "application/octet-stream",
+      data,
+      parentId
+    })
+  });
+}
+function readEntryFile(entry) {
+  return new Promise((resolve, reject) => entry.file(resolve, reject));
+}
+function readEntryBatch(reader) {
+  return new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+}
+async function readDroppedEntry(entry) {
+  if (entry.isFile) {
+    const file = await readEntryFile(entry);
+    return { kind: "file", name: file.name, file };
+  }
+  if (!entry.isDirectory) return null;
+
+  const reader = entry.createReader();
+  const entries = [];
+  while (true) {
+    const batch = await readEntryBatch(reader);
+    if (!batch.length) break;
+    entries.push(...batch);
+  }
+  const children = (await Promise.all(entries.map(readDroppedEntry))).filter(Boolean);
+  return { kind: "folder", name: entry.name, children };
+}
+function getDroppedNodes(dataTransfer) {
+  const items = Array.from(dataTransfer.items || []).filter(item => item.kind === "file");
+  const entries = [];
+  const itemFiles = [];
+  for (const item of items) {
+    const entry = typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null;
+    if (entry) entries.push(entry);
+    else {
+      const file = item.getAsFile();
+      if (file) itemFiles.push({ kind: "file", name: file.name, file });
+    }
+  }
+  const fallbackFiles = Array.from(dataTransfer.files || []).map(file => ({ kind: "file", name: file.name, file }));
+  return Promise.all(entries.map(readDroppedEntry)).then(nodes => {
+    const availableNodes = nodes.filter(Boolean);
+    if (availableNodes.length || itemFiles.length) return [...availableNodes, ...itemFiles];
+    return fallbackFiles;
+  });
+}
+function countFiles(nodes) {
+  return nodes.reduce((count, node) => count + (node.kind === "file" ? 1 : countFiles(node.children || [])), 0);
+}
+async function uploadNode(node, parentId, state) {
+  if (node.kind === "folder") {
+    showNotice(`Membuat folder: ${node.name}`);
+    let folderId;
+    try {
+      const result = await api("folders", { method: "POST", body: JSON.stringify({ name: node.name, parentId }) });
+      folderId = result.file.id;
+      state.foldersUploaded += 1;
+    } catch (error) {
+      state.failed += 1;
+      state.errors.push(`${node.name}: ${error.message}`);
+      return;
+    }
+    for (const child of node.children) await uploadNode(child, folderId, state);
+    return;
+  }
+
+  state.filesProcessed += 1;
+  showNotice(`Mengunggah file ${state.filesProcessed}/${state.totalFiles}: ${node.name}`);
+  try {
+    await uploadFileToDrive(node.file, parentId);
+    state.filesUploaded += 1;
+  } catch (error) {
+    state.failed += 1;
+    state.errors.push(`${node.name}: ${error.message}`);
+  }
+}
+async function uploadNodes(nodes, parentId) {
+  if (!nodes.length) {
+    showNotice("Tidak ada file atau folder yang bisa dibaca. Coba seret lagi dari File Explorer.", true);
+    return;
+  }
+  const state = { totalFiles: countFiles(nodes), filesProcessed: 0, filesUploaded: 0, foldersUploaded: 0, failed: 0, errors: [] };
+  for (const node of nodes) await uploadNode(node, parentId, state);
+  const refreshed = await loadFiles(currentParent);
+  if (!refreshed) return;
+  let summary = `Upload selesai: ${state.filesUploaded} file dan ${state.foldersUploaded} folder berhasil.`;
+  if (state.failed) {
+    const details = state.errors.slice(0, 2).join("; ");
+    const more = state.errors.length > 2 ? `; dan ${state.errors.length - 2} lainnya` : "";
+    summary += ` Gagal ${state.failed}: ${details}${more}`;
+  }
+  showNotice(summary, state.failed > 0);
+}
+function hasDraggedFiles(event) {
+  return Array.from(event.dataTransfer?.items || []).some(item => item.kind === "file") ||
+    Array.from(event.dataTransfer?.types || []).includes("Files");
+}
 function showLogin() { $("loginView").classList.remove("hidden"); $("appView").classList.add("hidden"); }
 function showApp(username) { $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden"); $("userBadge").textContent = username; }
 
@@ -151,21 +271,41 @@ $("newFolderBtn").addEventListener("click", async () => {
   } catch (e) { showNotice(e.message, true); }
 });
 $("uploadInput").addEventListener("change", async (event) => {
-  const file = event.target.files[0]; if (!file) return;
-  if (file.size > 3 * 1024 * 1024) { showNotice("Ukuran maksimal 3 MB untuk versi pemula ini.", true); event.target.value = ""; return; }
-  try {
-    showNotice(`Mengunggah ${file.name}...`);
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result).split(",")[1]);
-      reader.onerror = () => reject(new Error("Gagal membaca file."));
-      reader.readAsDataURL(file);
-    });
-    await api("upload", { method: "POST", body: JSON.stringify({ name: file.name, mimeType: file.type || "application/octet-stream", data: base64, parentId: currentParent }) });
-    showNotice("Upload berhasil disimpan ke Google Drive."); await loadFiles(currentParent);
-  } catch (e) { showNotice(e.message, true); }
-  finally { event.target.value = ""; }
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
+  await uploadNodes(files.map(file => ({ kind: "file", name: file.name, file })), currentParent);
+  event.target.value = "";
 });
+const appView = $("appView");
+appView.addEventListener("dragenter", event => {
+  if (!hasDraggedFiles(event)) return;
+  event.preventDefault();
+  appView.classList.add("drag-over");
+});
+appView.addEventListener("dragover", event => {
+  if (!hasDraggedFiles(event)) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+  appView.classList.add("drag-over");
+});
+appView.addEventListener("dragleave", event => {
+  if (!appView.contains(event.relatedTarget)) appView.classList.remove("drag-over");
+});
+appView.addEventListener("drop", async event => {
+  if (!hasDraggedFiles(event)) return;
+  event.preventDefault();
+  appView.classList.remove("drag-over");
+  const destinationId = currentParent;
+  showNotice("Membaca file dan folder...");
+  try {
+    const nodes = await getDroppedNodes(event.dataTransfer);
+    await uploadNodes(nodes, destinationId);
+  } catch (error) {
+    showNotice(error.message || "Tidak dapat membaca file atau folder yang diseret.", true);
+  }
+});
+document.addEventListener("dragover", event => { if (hasDraggedFiles(event)) event.preventDefault(); });
+document.addEventListener("drop", event => { if (hasDraggedFiles(event)) event.preventDefault(); });
 $("searchInput").addEventListener("input", renderFiles);
 document.querySelector(".table-wrap").addEventListener("contextmenu", event => showContextMenu(event));
 document.addEventListener("click", event => {
@@ -185,11 +325,13 @@ async function loadFiles(parentId = null, reset = false) {
     rootId = data.rootId; currentParent = parentId || rootId; allFiles = data.files || [];
     if (reset || !parentId) crumbs = [{ id: rootId, name: "Semua file" }];
     renderCrumbs(); renderFiles();
+    return true;
   } catch (e) {
     if (/login|sesi/i.test(e.message)) {
       showLogin(); $("loginMessage").textContent = e.message;
     }
     else showNotice(e.message, true);
+    return false;
   }
 }
 function renderCrumbs() {

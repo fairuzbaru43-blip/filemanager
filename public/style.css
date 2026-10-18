@@ -179,6 +179,11 @@ button {
   gap: 14px;
   margin: 26px 0 18px;
 }
+.drop-hint {
+  margin: -8px 0 16px;
+  color: #748096;
+  font-size: 12px;
+}
 .search {
   width: min(100%, 400px);
   padding: 12px 14px;
@@ -230,6 +235,26 @@ button {
   border: 1px solid #e5eaf2;
   border-radius: 14px;
   overflow: auto;
+}
+#appView {
+  position: relative;
+}
+#appView.drag-over::after {
+  content: "Lepaskan file atau folder di sini untuk upload";
+  position: fixed;
+  z-index: 900;
+  inset: 12px;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  border: 3px dashed #2563eb;
+  border-radius: 20px;
+  background: rgb(239 246 255 / 94%);
+  color: #1d4ed8;
+  font-size: clamp(18px, 3vw, 28px);
+  font-weight: 700;
+  text-align: center;
+  pointer-events: none;
 }
 table {
   border-collapse: collapse;

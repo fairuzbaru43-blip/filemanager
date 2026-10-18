@@ -38,9 +38,10 @@
         <input id="searchInput" class="search" type="search" placeholder="Cari file atau folder..." aria-label="Cari file">
         <div class="actions">
           <button id="newFolderBtn" class="secondary">＋ Folder</button>
-          <label class="primary upload-label">↑ Upload<input id="uploadInput" type="file" hidden></label>
+          <label class="primary upload-label">↑ Upload<input id="uploadInput" type="file" multiple hidden></label>
         </div>
       </div>
+      <p class="drop-hint">Seret file atau folder dari File Explorer ke halaman ini untuk upload. Maksimal 3 MB per file.</p>
       <div id="breadcrumbs" class="breadcrumbs"></div>
       <div id="notice" class="notice hidden" role="status"></div>
       <div class="table-wrap">
