@@ -50,6 +50,11 @@ function validateUploadUrl(value) {
   return url.href;
 }
 
+function getResponseHeader(headers, name) {
+  if (typeof headers?.get === "function") return headers.get(name);
+  return headers?.[name] || headers?.[name.toLowerCase()];
+}
+
 async function startResumableUpload(req, res, drive) {
   const { name, mimeType, size, parentId } = req.body || {};
   if (!validateName(name) || !Number.isSafeInteger(size) || size < 1 ||
@@ -74,7 +79,7 @@ async function startResumableUpload(req, res, drive) {
       "X-Upload-Content-Length": String(size)
     }
   });
-  const sessionUrl = validateUploadUrl(response.headers?.location);
+  const sessionUrl = validateUploadUrl(getResponseHeader(response.headers, "location"));
   if (!sessionUrl) throw new Error("Google Drive tidak mengembalikan sesi upload yang valid.");
   return res.status(200).json({ uploadUrl: sessionUrl });
 }

@@ -48,9 +48,9 @@ test("resumable upload enforces 1 GiB and sends aligned chunks", async t => {
   const requests = [];
   const responses = [
     {
-      headers: {
+      headers: new Headers({
         location: "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=session"
-      }
+      })
     },
     { status: 308 },
     { status: 200, data: { id: "uploaded-file-id" } }
