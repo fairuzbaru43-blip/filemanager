@@ -158,6 +158,19 @@ function renderFiles() {
         actions.append(dl);
       }
       if (file.webViewLink) { const open = document.createElement("button"); open.className = "small-action"; open.textContent = "Drive"; open.addEventListener("click", () => window.open(file.webViewLink, "_blank", "noopener,noreferrer")); actions.append(open); }
+    } else {
+      const rename = document.createElement("button"); rename.className = "small-action"; rename.textContent = "Ganti nama";
+      rename.addEventListener("click", async () => {
+        const proposedName = prompt("Nama folder baru:", file.name);
+        if (proposedName === null) return;
+        const name = proposedName.trim();
+        if (!name || name === file.name) return;
+        try {
+          await api("rename", { method: "POST", body: JSON.stringify({ id: file.id, name }) });
+          showNotice("Nama folder berhasil diubah."); await loadFiles(currentParent);
+        } catch (e) { showNotice(e.message, true); }
+      });
+      actions.append(rename);
     }
     const del = document.createElement("button"); del.className = "small-action delete-action"; del.textContent = "Hapus";
     del.addEventListener("click", async () => {
