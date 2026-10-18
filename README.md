@@ -8,7 +8,7 @@ Starter project untuk belajar HTML, CSS, JavaScript, Node.js API, login username
 - Pembatasan login lintas instance dengan Upstash Redis: 20 percobaan per alamat IP dan 5 percobaan per akun/IP dalam 15 menit.
 - Daftar file/folder, navigasi folder, pencarian pada folder aktif.
 - Buat folder, upload file, download, dan pindahkan file ke Sampah.
-- File disimpan pada folder Google Drive yang dibagikan kepada service account.
+- Untuk folder di Drive Saya, file diakses sebagai akun Google pemilik lewat OAuth server-side.
 - Operasi file dibatasi ke folder aplikasi dan subfoldernya.
 
 ## Batasan versi pemula
@@ -34,18 +34,19 @@ Starter project untuk belajar HTML, CSS, JavaScript, Node.js API, login username
 1. Buat folder khusus, misalnya `DriveBox Shared`.
 2. Salin ID folder dari URL: `https://drive.google.com/drive/folders/ID_FOLDER`.
 3. Jangan membuat folder ini publik.
-4. Setelah membuat service account (langkah berikut), bagikan folder tersebut sebagai Editor ke alamat email service account. Jangan membagikan seluruh Drive pribadi.
 
-## 4. Aktifkan Google Drive API dan service account
-1. Buka https://console.cloud.google.com/
-2. Buat atau pilih Google Cloud project.
-3. Buka APIs & Services > Library, cari **Google Drive API**, lalu Enable.
-4. Buka IAM & Admin > Service Accounts, lalu Create Service Account.
-5. Buat key JSON untuk service account hanya jika kebijakan organisasi mengizinkannya. Simpan file JSON dengan aman; jangan commit ke GitHub.
-6. Bagikan folder `DriveBox Shared` ke email service account (alamat berakhiran `iam.gserviceaccount.com`) dengan akses Editor.
-7. Karena aplikasi memakai service account ke folder yang dibagikan, alur ini tidak membutuhkan OAuth consent/login Google pengguna. Login website sendiri memakai username/password. Jika memakai Shared Drive Google Workspace, tambahkan service account sebagai anggota Shared Drive sesuai kebijakan organisasi.
+## 4. Hubungkan Drive Saya dengan OAuth
+Service account tidak memiliki kuota penyimpanan Drive dan tidak dapat menjadi pemilik file. Untuk mengunggah ke folder biasa di Drive Saya, gunakan OAuth akun Google pemilik folder. Shared Drive organisasi dapat memakai service account jika organisasi mengizinkannya.
 
-> Catatan: Service account tidak otomatis memiliki ruang Drive pribadi seperti pengguna biasa. Cara paling sederhana adalah berbagi folder khusus dengan service account. Hindari domain-wide delegation kecuali benar-benar diperlukan dan dikelola administrator Workspace.
+1. Buka Google Cloud Console dan pilih project yang akan dipakai.
+2. Buka **APIs & Services > Library**, cari **Google Drive API**, lalu klik **Enable**.
+3. Buka **Google Auth Platform** dan lengkapi Branding. Di Audience, pilih **External** dan tambahkan akun Google pemilik folder sebagai test user.
+4. Di Data Access, tambahkan scope `https://www.googleapis.com/auth/drive`.
+5. Di Clients, buat OAuth Client ID bertipe **Desktop app**, lalu unduh file JSON client. File ini berbeda dari JSON service account.
+6. Dari terminal pada folder proyek, jalankan `node scripts/generate-drive-oauth-token.js`. Masukkan path file JSON OAuth client saat diminta, lalu buka URL yang ditampilkan. Login ke akun Google pemilik folder dan izinkan akses.
+7. Skrip menyimpan tiga nilai OAuth ke `.env.drive-oauth`, yang diabaikan Git. Jangan kirim file atau nilainya kepada siapa pun.
+
+Penting: Jika aplikasi External masih berstatus **Testing**, Google mengeluarkan refresh token yang kedaluwarsa setelah 7 hari untuk scope Drive. Untuk penggunaan yang terus aktif, atur status publikasi aplikasi sesuai panduan Google; verifikasi mungkin diperlukan jika aplikasi dibagikan ke pengguna lain.
 
 ## 5. Siapkan variabel lingkungan
 Salin `.env.example` menjadi `.env.local` di folder utama, lalu isi nilainya secara lokal. `.env.local` diabaikan Git.
@@ -54,14 +55,17 @@ Salin `.env.example` menjadi `.env.local` di folder utama, lalu isi nilainya sec
 APP_USERNAME=REPLACE_WITH_ADMIN_USERNAME
 APP_PASSWORD_HASH=REPLACE_WITH_BCRYPT_HASH
 SESSION_SECRET=REPLACE_WITH_AT_LEAST_32_RANDOM_BYTES
-GOOGLE_SERVICE_ACCOUNT_JSON=REPLACE_WITH_SERVICE_ACCOUNT_JSON
+GOOGLE_OAUTH_CLIENT_ID=REPLACE_WITH_OAUTH_CLIENT_ID
+GOOGLE_OAUTH_CLIENT_SECRET=REPLACE_WITH_OAUTH_CLIENT_SECRET
+GOOGLE_OAUTH_REFRESH_TOKEN=REPLACE_WITH_OAUTH_REFRESH_TOKEN
 DRIVE_FOLDER_ID=REPLACE_WITH_DRIVE_FOLDER_ID
 UPSTASH_REDIS_REST_URL=https://REPLACE_WITH_UPSTASH_REST_URL
 UPSTASH_REDIS_REST_TOKEN=REPLACE_WITH_UPSTASH_REST_TOKEN
 ```
 
 - `.env.example` hanya berisi placeholder. Ganti setiap nilai setelah menyalinnya ke `.env.local`; jangan isi rahasia ke `.env.example`.
-- `GOOGLE_SERVICE_ACCOUNT_JSON` harus berupa JSON satu baris yang valid. Pastikan karakter newline dalam `private_key` direpresentasikan sebagai `\n`.
+- Untuk folder di Drive Saya, isi `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, dan `GOOGLE_OAUTH_REFRESH_TOKEN` dari file `.env.drive-oauth`. Jika ketiganya ada, aplikasi memakai OAuth tersebut untuk semua operasi Drive.
+- `GOOGLE_SERVICE_ACCOUNT_JSON` tetap dapat dipakai sebagai alternatif untuk Shared Drive Workspace. Jika OAuth belum diatur, aplikasi akan memakai kredensial service account yang valid.
 - `UPSTASH_REDIS_REST_URL` harus berupa URL HTTPS REST Upstash. Jangan menambahkan tanda kutip atau spasi pada nilai-nilai environment.
 - `APP_USERNAME` adalah username admin; `APP_PASSWORD_HASH` hanya menerima hash bcrypt yang valid dengan cost minimal 10.
 - Buat hash bcrypt cost 12 dari PowerShell pada folder proyek. Ketikan password tidak ditampilkan:
@@ -101,11 +105,13 @@ Jika konfigurasi belum lengkap, halaman akan menampilkan nama environment variab
    - `APP_USERNAME`
    - `APP_PASSWORD_HASH`
    - `SESSION_SECRET`
-   - `GOOGLE_SERVICE_ACCOUNT_JSON`
+   - `GOOGLE_OAUTH_CLIENT_ID`
+   - `GOOGLE_OAUTH_CLIENT_SECRET`
+   - `GOOGLE_OAUTH_REFRESH_TOKEN`
    - `DRIVE_FOLDER_ID`
    - `UPSTASH_REDIS_REST_URL`
    - `UPSTASH_REDIS_REST_TOKEN`
-4. Masukkan nilai JSON service account lengkap sebagai satu nilai environment variable. Jangan memakai awalan publik seperti `NEXT_PUBLIC_` untuk variabel rahasia.
+4. Salin tiga nilai dari `.env.drive-oauth` ke environment variables Vercel. Pastikan ketiganya disetel untuk Production. Jangan memakai awalan publik seperti `NEXT_PUBLIC_` untuk variabel rahasia.
 5. Deploy atau redeploy setelah mengatur variabel.
 6. Uji login, buat folder, upload file kecil, download, dan hapus file uji.
 
