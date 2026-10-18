@@ -17,7 +17,8 @@ body {
   margin: 0;
 }
 button,
-input {
+input,
+select {
   font: inherit;
 }
 button {
@@ -190,6 +191,14 @@ button {
   border: 1px solid #dce2ec;
   border-radius: 11px;
   background: white;
+  outline-color: #2563eb;
+}
+.sort-select {
+  padding: 12px 14px;
+  border: 1px solid #dce2ec;
+  border-radius: 11px;
+  background: white;
+  color: #172033;
   outline-color: #2563eb;
 }
 .actions {
@@ -398,6 +407,9 @@ tr:last-child td {
     flex-direction: column;
   }
   .search {
+    width: 100%;
+  }
+  .sort-select {
     width: 100%;
   }
   .actions > * {

@@ -36,6 +36,14 @@
       </header>
       <div class="toolbar">
         <input id="searchInput" class="search" type="search" placeholder="Cari file atau folder..." aria-label="Cari file">
+        <select id="sortSelect" class="sort-select" aria-label="Urutkan file dan folder">
+          <option value="name-asc">Nama (A–Z)</option>
+          <option value="name-desc">Nama (Z–A)</option>
+          <option value="size-desc">Ukuran (terbesar)</option>
+          <option value="size-asc">Ukuran (terkecil)</option>
+          <option value="newest">Terbaru</option>
+          <option value="oldest">Terlama</option>
+        </select>
         <div class="actions">
           <button id="newFolderBtn" class="secondary">＋ Folder</button>
           <label class="primary upload-label">↑ Upload<input id="uploadInput" type="file" multiple hidden></label>

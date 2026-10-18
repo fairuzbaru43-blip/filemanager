@@ -3,6 +3,8 @@ let currentParent = null;
 let rootId = null;
 let allFiles = [];
 let crumbs = [];
+let sortOrder = "name-asc";
+const nameCollator = new Intl.Collator("id", { numeric: true, sensitivity: "base" });
 let authFlowVersion = 0;
 let clipboardItem = null;
 let currentRole = null;
@@ -366,6 +368,10 @@ appView.addEventListener("drop", async event => {
 document.addEventListener("dragover", event => { if (hasDraggedFiles(event)) event.preventDefault(); });
 document.addEventListener("drop", event => { if (hasDraggedFiles(event)) event.preventDefault(); });
 $("searchInput").addEventListener("input", renderFiles);
+$("sortSelect").addEventListener("change", event => {
+  sortOrder = event.target.value;
+  renderFiles();
+});
 document.querySelector(".table-wrap").addEventListener("contextmenu", event => showContextMenu(event));
 document.addEventListener("click", event => {
   if (!$("contextMenu").contains(event.target)) hideContextMenu();
@@ -409,10 +415,35 @@ function formatSize(bytes) {
   return `${(n/(1024*1024)).toFixed(1)} MB`;
 }
 function addCell(row, text) { const td = document.createElement("td"); td.textContent = text; row.append(td); return td; }
+function compareFiles(a, b) {
+  const aFolder = a.mimeType === "application/vnd.google-apps.folder";
+  const bFolder = b.mimeType === "application/vnd.google-apps.folder";
+  if (aFolder !== bFolder) return aFolder ? -1 : 1;
+
+  let result = 0;
+  if (sortOrder === "size-asc" || sortOrder === "size-desc") {
+    const aSize = Number(a.size), bSize = Number(b.size);
+    const aHasSize = !aFolder && a.size != null && a.size !== "" && Number.isFinite(aSize);
+    const bHasSize = !bFolder && b.size != null && b.size !== "" && Number.isFinite(bSize);
+    if (aHasSize !== bHasSize) return aHasSize ? -1 : 1;
+    if (aHasSize) result = sortOrder === "size-asc" ? aSize - bSize : bSize - aSize;
+  } else if (sortOrder === "newest" || sortOrder === "oldest") {
+    const aTime = Date.parse(a.modifiedTime);
+    const bTime = Date.parse(b.modifiedTime);
+    const aHasTime = Number.isFinite(aTime);
+    const bHasTime = Number.isFinite(bTime);
+    if (aHasTime !== bHasTime) return aHasTime ? -1 : 1;
+    if (aHasTime) result = sortOrder === "newest" ? bTime - aTime : aTime - bTime;
+  } else {
+    result = nameCollator.compare(a.name, b.name);
+    if (sortOrder === "name-desc") result *= -1;
+  }
+  return result || nameCollator.compare(a.name, b.name);
+}
 function renderFiles() {
   const tbody = $("fileRows"); tbody.replaceChildren();
   const query = $("searchInput").value.trim().toLowerCase();
-  const items = allFiles.filter(f => f.name.toLowerCase().includes(query));
+  const items = allFiles.filter(f => f.name.toLowerCase().includes(query)).sort(compareFiles);
   if (!items.length) { const tr = document.createElement("tr"), td = document.createElement("td"); td.colSpan = 5; td.className = "empty"; td.textContent = query ? "File tidak ditemukan." : "Folder ini masih kosong."; tr.append(td); tbody.append(tr); return; }
   for (const file of items) {
     const folder = file.mimeType === "application/vnd.google-apps.folder";

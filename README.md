@@ -6,7 +6,7 @@ Starter project untuk belajar HTML, CSS, JavaScript, Node.js API, login username
 - Login dua peran (admin dan user) dengan hash bcrypt. Admin dapat membuat folder privat yang hanya dapat dilihat admin; user tidak dapat membuka folder tersebut maupun item di dalamnya.
 - Sesi JWT di cookie HttpOnly, SameSite=Lax, Secure saat production, dengan pencabutan sesi di Upstash Redis saat logout.
 - Pembatasan login lintas instance dengan Upstash Redis: 20 percobaan per alamat IP dan 5 percobaan per akun/IP dalam 15 menit.
-- Daftar file/folder, navigasi folder, pencarian pada folder aktif.
+- Daftar file/folder, navigasi folder, pencarian pada folder aktif, dan pengurutan berdasarkan nama (alfabetis dengan angka), ukuran file, serta waktu perubahan.
 - Buat folder, upload file, download, dan pindahkan file ke Sampah.
 - Untuk folder di Drive Saya, file diakses sebagai akun Google pemilik lewat OAuth server-side.
 - Operasi file dibatasi ke folder aplikasi dan subfoldernya.
