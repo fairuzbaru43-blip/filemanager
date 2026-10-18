@@ -59,6 +59,11 @@ function showContextMenu(event, file = null) {
   if (clipboardItem) {
     addContextAction(menu, `Paste "${clipboardItem.name}" di sini`, () => pasteClipboard(destinationId));
   }
+  if (file) {
+    addContextSeparator(menu);
+    addContextAction(menu, "Hapus", () => deleteItem(file));
+    menu.lastElementChild.classList.add("context-menu-danger");
+  }
   if (!menu.childElementCount) return;
 
   menu.classList.remove("hidden");
@@ -76,6 +81,14 @@ async function renameItem(file) {
     await api("rename", { method: "POST", body: JSON.stringify({ id: file.id, name }) });
     await loadFiles(currentParent);
     showNotice("Nama berhasil diubah.");
+  } catch (e) { showNotice(e.message, true); }
+}
+async function deleteItem(file) {
+  if (!confirm(`Pindahkan "${file.name}" ke Sampah Google Drive?`)) return;
+  try {
+    await api("delete", { method: "POST", body: JSON.stringify({ id: file.id }) });
+    await loadFiles(currentParent);
+    showNotice("Item dipindahkan ke Sampah Google Drive.");
   } catch (e) { showNotice(e.message, true); }
 }
 async function pasteClipboard(parentId) {
@@ -239,11 +252,7 @@ function renderFiles() {
       actions.append(rename);
     }
     const del = document.createElement("button"); del.className = "small-action delete-action"; del.textContent = "Hapus";
-    del.addEventListener("click", async () => {
-      if (!confirm(`Pindahkan "${file.name}" ke Sampah Google Drive?`)) return;
-      try { await api("delete", { method: "POST", body: JSON.stringify({ id: file.id }) }); showNotice("File dipindahkan ke Sampah."); await loadFiles(currentParent); }
-      catch (e) { showNotice(e.message, true); }
-    });
+    del.addEventListener("click", () => deleteItem(file));
     actions.append(del); tr.append(actions); tbody.append(tr);
   }
 }

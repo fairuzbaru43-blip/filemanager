@@ -309,6 +309,14 @@ tr:last-child td {
   background: #eff6ff;
   color: #1d4ed8;
 }
+.context-menu-danger {
+  color: #b42318;
+}
+.context-menu-danger:hover,
+.context-menu-danger:focus-visible {
+  background: #fff1f0;
+  color: #b42318;
+}
 .context-menu-separator {
   height: 1px;
   margin: 5px 4px;
