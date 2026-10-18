@@ -82,6 +82,66 @@ async function collectFolderEntries(drive, folderId, prefix, context, depth = 0)
   } while (pageToken);
 }
 
+function createFileStreamPrefetcher(drive, entries, maxPending = 3) {
+  const files = entries.filter(entry => !entry.directory);
+  const pending = new Map();
+  const openedStreams = new Set();
+  const streamErrors = new WeakMap();
+  let nextFile = 0;
+  let cancelled = false;
+
+  function openDriveStream(entry) {
+    return entry.exportFormat
+      ? drive.files.export({ fileId: entry.id, mimeType: entry.exportFormat.mimeType }, { responseType: "stream" })
+      : drive.files.get({ fileId: entry.id, supportsAllDrives: true, alt: "media" }, { responseType: "stream" });
+  }
+
+  function fillQueue() {
+    while (!cancelled && pending.size < maxPending && nextFile < files.length) {
+      const entry = files[nextFile++];
+      const promise = openDriveStream(entry).then(result => {
+        const stream = result.data;
+        if (cancelled) {
+          stream.destroy();
+          throw new Error("Unduhan folder dibatalkan.");
+        }
+        openedStreams.add(stream);
+        stream.on("error", error => streamErrors.set(stream, error));
+        stream.once("close", () => openedStreams.delete(stream));
+        return stream;
+      });
+      // A later file can fail before the ZIP generator reaches it; keep that
+      // rejection available to await while preventing an unhandled rejection.
+      promise.catch(() => {});
+      pending.set(entry, promise);
+    }
+  }
+
+  fillQueue();
+  return {
+    async ready() {
+      await Promise.all(pending.values());
+    },
+    async open(entry) {
+      const promise = pending.get(entry);
+      if (!promise) throw new Error("Stream file ZIP belum siap.");
+      pending.delete(entry);
+      fillQueue();
+      const stream = await promise;
+      if (streamErrors.has(stream)) throw streamErrors.get(stream);
+      return stream;
+    },
+    cancel() {
+      cancelled = true;
+      for (const stream of openedStreams) stream.destroy();
+      for (const promise of pending.values()) {
+        promise.then(stream => stream.destroy(), () => {});
+      }
+      pending.clear();
+    }
+  };
+}
+
 async function downloadFolderZip(drive, meta, res) {
   const rootPath = `${safeZipSegment(meta.name)}/`;
   const context = { entries: [{ path: rootPath, directory: true }], unsupported: [] };
@@ -92,31 +152,38 @@ async function downloadFolderZip(drive, meta, res) {
     return res.status(415).json({ error: `Folder berisi item yang tidak dapat diunduh melalui aplikasi: ${names}${more}.` });
   }
 
+  const fileStreams = createFileStreamPrefetcher(drive, context.entries);
+  try {
+    await fileStreams.ready();
+  } catch (error) {
+    fileStreams.cancel();
+    throw error;
+  }
+
   const zipName = `${safeZipSegment(meta.name)}.zip`;
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Content-Type", "application/zip");
   res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(zipName)}`);
 
-  const zipStream = Readable.from(context.entries.length
-    ? createZipStream(context.entries, async entry => {
-      const result = entry.exportFormat
-        ? await drive.files.export({ fileId: entry.id, mimeType: entry.exportFormat.mimeType }, { responseType: "stream" })
-        : await drive.files.get({ fileId: entry.id, supportsAllDrives: true, alt: "media" }, { responseType: "stream" });
-      return result.data;
-    })
-    : []);
+  const zipStream = Readable.from(createZipStream(context.entries, entry => fileStreams.open(entry)));
   zipStream.on("error", error => {
+    fileStreams.cancel();
     if (res.headersSent) {
       const knownErrorTypes = ["Error", "TypeError", "GaxiosError", "GoogleAuthError"];
+      const status = Number.isInteger(error?.response?.status) ? error.response.status : undefined;
       console.error("Google Drive folder ZIP stream failed.", {
-        errorType: knownErrorTypes.includes(error?.name) ? error.name : "OtherError"
+        errorType: knownErrorTypes.includes(error?.name) ? error.name : "OtherError",
+        ...(status ? { status } : {})
       });
       res.destroy(error);
       return;
     }
     sendDriveError(res, error, "Gagal membuat ZIP folder Google Drive.", "Google Drive folder ZIP download failed.");
   });
-  res.on("close", () => { if (!res.writableEnded && !zipStream.destroyed) zipStream.destroy(); });
+  res.on("close", () => {
+    fileStreams.cancel();
+    if (!res.writableEnded && !zipStream.destroyed) zipStream.destroy();
+  });
   zipStream.pipe(res);
 }
 
