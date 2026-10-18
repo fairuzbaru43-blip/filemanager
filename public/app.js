@@ -104,7 +104,8 @@ async function pasteClipboard(parentId) {
     showNotice(pending.action === "cut" ? "Item berhasil dipindahkan." : "Item berhasil disalin.");
   } catch (e) { showNotice(e.message, true); }
 }
-const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+const MAX_UPLOAD_CHUNK_BYTES = 2.5 * 1024 * 1024;
 function readFileAsBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -119,17 +120,48 @@ function readFileAsBase64(file) {
   });
 }
 async function uploadFileToDrive(file, parentId) {
-  if (file.size > MAX_UPLOAD_BYTES) throw new Error("Ukuran maksimal 3 MB per file.");
-  const data = await readFileAsBase64(file);
-  await api("upload", {
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error("Ukuran maksimal 15 MB per file.");
+  if (file.size <= 3 * 1024 * 1024) {
+    const data = await readFileAsBase64(file);
+    await api("upload", {
+      method: "POST",
+      body: JSON.stringify({
+        name: file.name,
+        mimeType: file.type || "application/octet-stream",
+        data,
+        parentId
+      })
+    });
+    return;
+  }
+
+  const { uploadUrl } = await api("upload", {
     method: "POST",
     body: JSON.stringify({
+      action: "start",
       name: file.name,
       mimeType: file.type || "application/octet-stream",
-      data,
+      size: file.size,
       parentId
     })
   });
+  for (let offset = 0; offset < file.size;) {
+    const end = Math.min(offset + MAX_UPLOAD_CHUNK_BYTES, file.size);
+    const data = await readFileAsBase64(file.slice(offset, end));
+    const result = await api("upload", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "chunk",
+        uploadUrl,
+        mimeType: file.type || "application/octet-stream",
+        offset,
+        size: file.size,
+        data
+      })
+    });
+    offset = end;
+    if (offset === file.size && !result.complete) throw new Error("Google Drive belum menyelesaikan upload.");
+  }
 }
 function readEntryFile(entry) {
   return new Promise((resolve, reject) => entry.file(resolve, reject));
