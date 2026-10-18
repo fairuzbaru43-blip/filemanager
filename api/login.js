@@ -48,12 +48,11 @@ module.exports = async (req, res) => {
       res.setHeader("Retry-After", String(retryAfter));
       return res.status(429).json({ error: "Terlalu banyak percobaan login. Coba kembali beberapa saat lagi." });
     }
-    const usernameOk = username === process.env.APP_USERNAME;
-    const passwordOk = await verifyPassword(password);
-    if (!usernameOk || !passwordOk) return res.status(401).json({ error: "Username atau password salah." });
+    const role = await verifyPassword(username, password);
+    if (!role) return res.status(401).json({ error: "Username atau password salah." });
     await setSession(req, res, username);
     res.setHeader("Cache-Control", "no-store");
-    return res.status(200).json({ ok: true, username });
+    return res.status(200).json({ ok: true, username, role });
   } catch (error) {
     logAuthError("Login request failed.", error);
     return res.status(503).json({ error: "Layanan login sementara tidak tersedia. Periksa konfigurasi autentikasi dan rate limiting." });

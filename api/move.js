@@ -24,7 +24,8 @@ async function destinationIsInsideSourceFolder(drive, sourceId, destinationId, r
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "Metode tidak diizinkan." });
-  if (!await requireAuth(req, res)) return;
+  const user = await requireAuth(req, res);
+  if (!user) return;
 
   try {
     const { id, parentId } = req.body || {};
@@ -36,8 +37,8 @@ module.exports = async (req, res) => {
     const rootId = rootFolderId();
     if (id === rootId) return res.status(400).json({ error: "Folder utama aplikasi tidak dapat dipindahkan." });
     const drive = getDrive();
-    const item = await ensureFileInApp(drive, id);
-    await ensureFolderInApp(drive, parentId);
+    const item = await ensureFileInApp(drive, id, user.role);
+    await ensureFolderInApp(drive, parentId, user.role);
     if ((item.parents || []).includes(parentId)) return res.status(200).json({ ok: true, unchanged: true });
 
     if (item.mimeType === "application/vnd.google-apps.folder" &&

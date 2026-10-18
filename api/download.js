@@ -19,12 +19,13 @@ const exportsByMimeType = {
 
 module.exports = async (req, res) => {
   if (req.method !== "GET") return res.status(405).json({ error: "Metode tidak diizinkan." });
-  if (!await requireAuth(req, res)) return;
+  const user = await requireAuth(req, res);
+  if (!user) return;
   try {
     const id = req.query.id;
     if (typeof id !== "string" || !id) return res.status(400).json({ error: "ID file atau folder wajib diisi." });
     const drive = getDrive();
-    const meta = await ensureFileInApp(drive, id);
+    const meta = await ensureFileInApp(drive, id, user.role);
     if (meta.mimeType === FOLDER_MIME_TYPE) {
       return res.status(400).json({ error: "Unduhan folder tidak tersedia. Unduh file satu per satu." });
     }

@@ -8,7 +8,7 @@ const MAX_FOLDER_DEPTH = 20;
 const COPY_BATCH_SIZE = 5;
 const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
 
-async function listChildren(drive, folderId) {
+async function listChildren(drive, folderId, role) {
   const children = [];
   let pageToken;
   do {
@@ -18,15 +18,18 @@ async function listChildren(drive, folderId) {
       pageToken,
       supportsAllDrives: true,
       includeItemsFromAllDrives: true,
-      fields: "nextPageToken,files(id,name,mimeType)"
+      fields: "nextPageToken,files(id,name,mimeType,appProperties)"
     });
-    children.push(...(result.data.files || []));
+    const pageFiles = result.data.files || [];
+    children.push(...(role === "admin"
+      ? pageFiles
+      : pageFiles.filter(file => file.appProperties?.hiddenFromUser !== "true")));
     pageToken = result.data.nextPageToken;
   } while (pageToken);
   return children;
 }
 
-async function copyItem(drive, source, parentId, context, depth = 0) {
+async function copyItem(drive, source, parentId, context, role, depth = 0) {
   context.itemCount += 1;
   if (context.itemCount > MAX_COPIED_ITEMS) {
     throw new InvalidInputError(`Salin folder dibatasi maksimal ${MAX_COPIED_ITEMS} item sekaligus.`);
@@ -55,10 +58,10 @@ async function copyItem(drive, source, parentId, context, depth = 0) {
   const copiedFolder = folderResult.data;
   context.createdIds.push(copiedFolder.id);
 
-  const children = await listChildren(drive, source.id);
+  const children = await listChildren(drive, source.id, role);
   for (let start = 0; start < children.length; start += COPY_BATCH_SIZE) {
     const batch = children.slice(start, start + COPY_BATCH_SIZE);
-    const results = await Promise.allSettled(batch.map(child => copyItem(drive, child, copiedFolder.id, context, depth + 1)));
+    const results = await Promise.allSettled(batch.map(child => copyItem(drive, child, copiedFolder.id, context, role, depth + 1)));
     const failed = results.find(result => result.status === "rejected");
     if (failed) throw failed.reason;
   }
@@ -98,7 +101,8 @@ async function destinationIsInsideSourceFolder(drive, sourceId, destinationId, r
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "Metode tidak diizinkan." });
-  if (!await requireAuth(req, res)) return;
+  const user = await requireAuth(req, res);
+  if (!user) return;
 
   let drive;
   const createdIds = [];
@@ -112,14 +116,14 @@ module.exports = async (req, res) => {
     const rootId = rootFolderId();
     if (id === rootId) return res.status(400).json({ error: "Folder utama aplikasi tidak dapat disalin." });
     drive = getDrive();
-    const source = await ensureFileInApp(drive, id);
-    await ensureFolderInApp(drive, parentId);
+    const source = await ensureFileInApp(drive, id, user.role);
+    await ensureFolderInApp(drive, parentId, user.role);
     if (source.mimeType === FOLDER_MIME_TYPE && await destinationIsInsideSourceFolder(drive, id, parentId, rootId)) {
       throw new InvalidInputError("Folder tidak dapat disalin ke dalam dirinya sendiri atau folder turunannya.");
     }
 
     const context = { itemCount: 0, createdIds };
-    const copied = await copyItem(drive, source, parentId, context);
+    const copied = await copyItem(drive, source, parentId, context, user.role);
     return res.status(201).json({ file: copied, copiedItems: context.itemCount });
   } catch (e) {
     if (drive && createdIds.length) await trashPartialCopy(drive, createdIds);

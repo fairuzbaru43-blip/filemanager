@@ -1,6 +1,6 @@
 const bcrypt = require("bcryptjs");
 
-function readHiddenPassword() {
+function readHiddenPassword(role) {
   return new Promise((resolve, reject) => {
     const input = process.stdin;
     if (!input.isTTY || typeof input.setRawMode !== "function") {
@@ -43,7 +43,7 @@ function readHiddenPassword() {
       }
     }
 
-    process.stdout.write("Password admin baru (ketikan tersembunyi): ");
+    process.stdout.write(`Password ${role} baru (ketikan tersembunyi): `);
     input.setRawMode(true);
     input.resume();
     input.on("data", onData);
@@ -53,7 +53,11 @@ function readHiddenPassword() {
 async function main() {
   let passwordBytes;
   try {
-    passwordBytes = await readHiddenPassword();
+    const role = process.argv[2] || "admin";
+    if (!["admin", "user"].includes(role)) {
+      throw new Error("Pilih role admin atau user.");
+    }
+    passwordBytes = await readHiddenPassword(role);
     const password = passwordBytes.toString("utf8");
     if (!password || !Buffer.from(password, "utf8").equals(passwordBytes)) {
       throw new Error("Password kosong atau encoding tidak valid.");
@@ -62,7 +66,8 @@ async function main() {
       throw new Error("Password melebihi batas bcrypt 72 byte UTF-8.");
     }
     const hash = bcrypt.hashSync(password, 12);
-    process.stdout.write(`APP_PASSWORD_HASH=${hash}\n`);
+    const variable = role === "admin" ? "ADMIN_PASSWORD_HASH" : "USER_PASSWORD_HASH";
+    process.stdout.write(`${variable}=${hash}\n`);
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

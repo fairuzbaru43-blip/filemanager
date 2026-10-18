@@ -55,7 +55,7 @@ function getResponseHeader(headers, name) {
   return headers?.[name] || headers?.[name.toLowerCase()];
 }
 
-async function startResumableUpload(req, res, drive) {
+async function startResumableUpload(req, res, drive, role) {
   const { name, mimeType, size, parentId } = req.body || {};
   if (!validateName(name) || !Number.isSafeInteger(size) || size < 1 ||
       !validateParentId(parentId)) {
@@ -64,7 +64,7 @@ async function startResumableUpload(req, res, drive) {
   if (size > MAX_BYTES) return res.status(413).json({ error: "Ukuran maksimal 1 GB per file." });
 
   const parent = typeof parentId === "string" ? parentId : rootFolderId();
-  await ensureFolderInApp(drive, parent);
+  await ensureFolderInApp(drive, parent, role);
   const uploadUrl = new URL(GOOGLE_UPLOAD_URL);
   uploadUrl.searchParams.set("uploadType", "resumable");
   uploadUrl.searchParams.set("supportsAllDrives", "true");
@@ -117,11 +117,12 @@ async function uploadResumableChunk(req, res, drive) {
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "Metode tidak diizinkan." });
-  if (!await requireAuth(req, res)) return;
+  const user = await requireAuth(req, res);
+  if (!user) return;
   try {
     const { action, name, mimeType, data, parentId } = req.body || {};
     const drive = getDrive();
-    if (action === "start") return await startResumableUpload(req, res, drive);
+    if (action === "start") return await startResumableUpload(req, res, drive, user.role);
     if (action === "chunk") return await uploadResumableChunk(req, res, drive);
 
     if (!validateName(name) || !validateParentId(parentId)) {
@@ -130,7 +131,7 @@ module.exports = async (req, res) => {
     const buffer = decodeBase64(data, MAX_SINGLE_UPLOAD_BYTES);
     if (!buffer) return res.status(413).json({ error: "Upload satu request maksimal 3 MB; gunakan upload potongan untuk file lebih besar." });
     const parent = typeof parentId === "string" ? parentId : rootFolderId();
-    await ensureFolderInApp(drive, parent);
+    await ensureFolderInApp(drive, parent, user.role);
     const created = await drive.files.create({
       supportsAllDrives: true,
       requestBody: { name: name.trim(), parents: [parent] },

@@ -4,7 +4,8 @@ const { sendDriveError } = require("../lib/drive-error-response");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "Metode tidak diizinkan." });
-  if (!await requireAuth(req, res)) return;
+  const user = await requireAuth(req, res);
+  if (!user) return;
   try {
     const { name, parentId } = req.body || {};
     if (typeof name !== "string" || !name.trim() || name.length > 100 || /[\u0000-\u001f\u007f]/.test(name)) {
@@ -15,7 +16,7 @@ module.exports = async (req, res) => {
     }
     const parent = typeof parentId === "string" ? parentId : rootFolderId();
     const drive = getDrive();
-    await ensureFolderInApp(drive, parent);
+    await ensureFolderInApp(drive, parent, user.role);
     const result = await drive.files.create({
       supportsAllDrives: true,
       requestBody: { name: name.trim(), mimeType: "application/vnd.google-apps.folder", parents: [parent] },

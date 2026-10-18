@@ -4,7 +4,8 @@ const { sendDriveError } = require("../lib/drive-error-response");
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "Metode tidak diizinkan." });
-  if (!await requireAuth(req, res)) return;
+  const user = await requireAuth(req, res);
+  if (!user) return;
 
   try {
     const { id, name } = req.body || {};
@@ -19,7 +20,7 @@ module.exports = async (req, res) => {
     }
 
     const drive = getDrive();
-    await ensureFileInApp(drive, id);
+    await ensureFileInApp(drive, id, user.role);
     const result = await drive.files.update({
       fileId: id,
       supportsAllDrives: true,

@@ -21,7 +21,7 @@ function clearModule(path) {
 
 test("login session survives page loads and is revoked by logout", async () => {
   const environmentNames = [
-    "APP_USERNAME", "APP_PASSWORD_HASH", "SESSION_SECRET",
+    "ADMIN_USERNAME", "ADMIN_PASSWORD_HASH", "USER_USERNAME", "USER_PASSWORD_HASH", "SESSION_SECRET",
     "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "NODE_ENV"
   ];
   const originalEnvironment = Object.fromEntries(environmentNames.map(name => [name, process.env[name]]));
@@ -46,8 +46,10 @@ test("login session survives page loads and is revoked by logout", async () => {
   };
 
   try {
-    process.env.APP_USERNAME = "test-admin";
-    process.env.APP_PASSWORD_HASH = bcrypt.hashSync("test-only-password", 10);
+    process.env.ADMIN_USERNAME = "test-admin";
+    process.env.ADMIN_PASSWORD_HASH = bcrypt.hashSync("test-only-password", 10);
+    process.env.USER_USERNAME = "test-user";
+    process.env.USER_PASSWORD_HASH = bcrypt.hashSync("test-only-user-password", 10);
     process.env.SESSION_SECRET = "test-only-secret-at-least-32-bytes-long";
     process.env.UPSTASH_REDIS_REST_URL = "https://test-session-db.upstash.io";
     process.env.UPSTASH_REDIS_REST_TOKEN = "test-only-token";
@@ -95,7 +97,7 @@ test("login session survives page loads and is revoked by logout", async () => {
     }, loginResponse);
 
     assert.equal(loginResponse.statusCode, 200);
-    assert.deepEqual(loginResponse.body, { ok: true, username: "test-admin" });
+    assert.deepEqual(loginResponse.body, { ok: true, username: "test-admin", role: "admin" });
     assert.equal(loginResponse.headers["Cache-Control"], "no-store");
     const cookie = loginResponse.headers["Set-Cookie"];
     assert.match(cookie, /^fm_session=[^;]+;/);
@@ -111,7 +113,7 @@ test("login session survives page loads and is revoked by logout", async () => {
       const meResponse = response();
       await meHandler({ method: "GET", headers: { cookie: cookiePair }, socket: {} }, meResponse);
       assert.equal(meResponse.statusCode, 200);
-      assert.deepEqual(meResponse.body, { username: "test-admin" });
+      assert.deepEqual(meResponse.body, { username: "test-admin", role: "admin" });
       assert.equal(meResponse.headers["Cache-Control"], "no-store");
     }
 

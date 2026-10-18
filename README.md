@@ -3,17 +3,18 @@
 Starter project untuk belajar HTML, CSS, JavaScript, Node.js API, login username/password, dan penyimpanan bersama melalui Google Drive API.
 
 ## Fitur
-- Login username/password dengan hash bcrypt.
+- Login dua peran (admin dan user) dengan hash bcrypt. Admin dapat membuat folder privat yang hanya dapat dilihat admin; user tidak dapat membuka folder tersebut maupun item di dalamnya.
 - Sesi JWT di cookie HttpOnly, SameSite=Lax, Secure saat production, dengan pencabutan sesi di Upstash Redis saat logout.
 - Pembatasan login lintas instance dengan Upstash Redis: 20 percobaan per alamat IP dan 5 percobaan per akun/IP dalam 15 menit.
 - Daftar file/folder, navigasi folder, pencarian pada folder aktif.
 - Buat folder, upload file, download, dan pindahkan file ke Sampah.
 - Untuk folder di Drive Saya, file diakses sebagai akun Google pemilik lewat OAuth server-side.
 - Operasi file dibatasi ke folder aplikasi dan subfoldernya.
+- Admin menandai folder sebagai privat melalui tombol **Privatkan**. Pengaturan disimpan pada metadata aplikasi di Google Drive.
 
 ## Batasan versi pemula
 - Upload dibatasi 1 GiB per file; file di atas 3 MiB dikirim bertahap agar sesuai dengan batas request fungsi serverless.
-- Satu username/password bersama untuk semua anggota; belum ada akun per anggota, peran, atau audit log.
+- Dua akun tetap (admin dan user); belum ada akun per anggota atau audit log.
 - Endpoint hapus memindahkan item yang diberikan ke Sampah; gunakan hanya untuk folder Drive khusus aplikasi dan jangan gunakan pada file penting.
 - Gunakan folder Drive khusus aplikasi. Jangan masukkan dokumen sensitif sebelum melakukan tinjauan keamanan.
 - Untuk penggunaan tim sebenarnya, pertimbangkan database pengguna, akun individual, audit log, dan kontrol akses folder lebih ketat.
@@ -52,8 +53,10 @@ Penting: Jika aplikasi External masih berstatus **Testing**, Google mengeluarkan
 Salin `.env.example` menjadi `.env.local` di folder utama, lalu isi nilainya secara lokal. `.env.local` diabaikan Git.
 
 ```env
-APP_USERNAME=REPLACE_WITH_ADMIN_USERNAME
-APP_PASSWORD_HASH=REPLACE_WITH_BCRYPT_HASH
+ADMIN_USERNAME=REPLACE_WITH_ADMIN_USERNAME
+ADMIN_PASSWORD_HASH=REPLACE_WITH_ADMIN_BCRYPT_HASH
+USER_USERNAME=REPLACE_WITH_USER_USERNAME
+USER_PASSWORD_HASH=REPLACE_WITH_USER_BCRYPT_HASH
 SESSION_SECRET=REPLACE_WITH_AT_LEAST_32_RANDOM_BYTES
 GOOGLE_OAUTH_CLIENT_ID=REPLACE_WITH_OAUTH_CLIENT_ID
 GOOGLE_OAUTH_CLIENT_SECRET=REPLACE_WITH_OAUTH_CLIENT_SECRET
@@ -64,19 +67,20 @@ UPSTASH_REDIS_REST_TOKEN=REPLACE_WITH_UPSTASH_REST_TOKEN
 ```
 
 - `.env.example` hanya berisi placeholder. Ganti setiap nilai setelah menyalinnya ke `.env.local`; jangan isi rahasia ke `.env.example`.
+- Konfigurasi login lama `APP_USERNAME` dan `APP_PASSWORD_HASH` tidak dipakai lagi. Ganti dengan empat variabel admin/user di atas; semua sesi lama harus login kembali setelah deployment.
 - Untuk folder di Drive Saya, isi `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, dan `GOOGLE_OAUTH_REFRESH_TOKEN` dari file `.env.drive-oauth`. Jika ketiganya ada, aplikasi memakai OAuth tersebut untuk semua operasi Drive.
 - `GOOGLE_SERVICE_ACCOUNT_JSON` tetap dapat dipakai sebagai alternatif untuk Shared Drive Workspace. Jika OAuth belum diatur, aplikasi akan memakai kredensial service account yang valid.
 - `UPSTASH_REDIS_REST_URL` harus berupa URL HTTPS REST Upstash. Jangan menambahkan tanda kutip atau spasi pada nilai-nilai environment.
-- `APP_USERNAME` adalah username admin; `APP_PASSWORD_HASH` hanya menerima hash bcrypt yang valid dengan cost minimal 10.
-- Buat hash bcrypt cost 12 dari PowerShell pada folder proyek. Ketikan password tidak ditampilkan:
+- `ADMIN_USERNAME` dan `USER_USERNAME` harus berbeda. `ADMIN_PASSWORD_HASH` dan `USER_PASSWORD_HASH` masing-masing menyimpan hash bcrypt valid dengan cost minimal 10.
+- Buat hash bcrypt cost 12 untuk admin dan user secara terpisah dari PowerShell pada folder proyek. Ketikan password tidak ditampilkan:
 
 Pastikan terminal berada di folder proyek `file-manager-drive` (folder yang berisi `package.json`). Jika terminal masih di folder induk workspace, jalankan `cd .\file-manager-drive` terlebih dahulu. Kemudian jalankan:
 
 ```powershell
-node scripts/generate-password-hash.js
+node scripts/generate-password-hash.js admin
 ```
 
-Masukkan password baru saat diminta, lalu salin baris `APP_PASSWORD_HASH=...` ke Vercel. Jangan kirim atau simpan password maupun hash di chat atau file proyek.
+Masukkan password admin saat diminta, lalu salin baris `ADMIN_PASSWORD_HASH=...` ke `.env.local` atau Vercel. Ulangi dengan `node scripts/generate-password-hash.js user` untuk membuat `USER_PASSWORD_HASH`. Atur username admin dan user masing-masing pada environment variable. Jangan kirim atau simpan password maupun hash di chat atau file proyek.
 - Pilih password sepanjang maksimal 72 byte UTF-8 (batas bcrypt).
 - Buat secret sesi dengan:
 
@@ -87,7 +91,7 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 Pertahankan `SESSION_SECRET` tetap sama untuk semua function dan deployment instance pada environment Vercel yang sama. Jangan membuatnya ulang setiap request atau setiap deployment; mengganti nilainya akan membatalkan sesi aktif.
 
 - Di Windows PowerShell, buat file lokal dengan `Copy-Item .env.example .env.local`, lalu isi `.env.local` melalui VS Code.
-- Isi `APP_PASSWORD_HASH` dengan hasil bcrypt dan `SESSION_SECRET` dengan hasil `randomBytes` tersebut. Perubahan `SESSION_SECRET` akan membatalkan seluruh sesi yang sedang aktif.
+- Isi kedua hash dengan hasil bcrypt dan `SESSION_SECRET` dengan hasil `randomBytes` tersebut. Perubahan `SESSION_SECRET` akan membatalkan seluruh sesi yang sedang aktif.
 
 ## 6. Jalankan lokal
 ```bash
@@ -102,8 +106,10 @@ Jika konfigurasi belum lengkap, halaman akan menampilkan nama environment variab
 1. Push proyek ke repository GitHub pribadi yang tidak berisi `.env.local` atau JSON key.
 2. Di https://vercel.com/, pilih Add New > Project, lalu impor repository.
 3. Buka Project Settings > Environment Variables dan tambahkan variabel berikut untuk setiap target yang dipakai: Development, Preview, dan Production. Preview dan Production harus diisi sebelum deployment ke target tersebut.
-   - `APP_USERNAME`
-   - `APP_PASSWORD_HASH`
+   - `ADMIN_USERNAME`
+   - `ADMIN_PASSWORD_HASH`
+   - `USER_USERNAME`
+   - `USER_PASSWORD_HASH`
    - `SESSION_SECRET`
    - `GOOGLE_OAUTH_CLIENT_ID`
    - `GOOGLE_OAUTH_CLIENT_SECRET`

@@ -5,6 +5,7 @@ let allFiles = [];
 let crumbs = [];
 let authFlowVersion = 0;
 let clipboardItem = null;
+let currentRole = null;
 
 async function api(path, options = {}) {
   const res = await fetch(`/api/${path}`, {
@@ -82,6 +83,23 @@ async function renameItem(file) {
     await loadFiles(currentParent);
     showNotice("Nama berhasil diubah.");
   } catch (e) { showNotice(e.message, true); }
+}
+async function toggleFolderVisibility(file) {
+  const hidden = file.appProperties?.hiddenFromUser !== "true";
+  const action = hidden ? "sembunyikan dari username biasa" : "tampilkan untuk username biasa";
+  if (!confirm(`Apakah Anda ingin ${action} folder "${file.name}"?`)) return;
+  try {
+    await api("visibility", {
+      method: "POST",
+      body: JSON.stringify({ id: file.id, hidden })
+    });
+    await loadFiles(currentParent);
+    showNotice(hidden
+      ? `Folder "${file.name}" sekarang hanya dapat dilihat admin.`
+      : `Folder "${file.name}" sekarang dapat dilihat username biasa.`);
+  } catch (error) {
+    showNotice(error.message, true);
+  }
 }
 async function deleteItem(file) {
   if (!confirm(`Pindahkan "${file.name}" ke Sampah Google Drive?`)) return;
@@ -261,14 +279,19 @@ function hasDraggedFiles(event) {
     Array.from(event.dataTransfer?.types || []).includes("Files");
 }
 function showLogin() { $("loginView").classList.remove("hidden"); $("appView").classList.add("hidden"); }
-function showApp(username) { $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden"); $("userBadge").textContent = username; }
+function showApp(username, role) {
+  currentRole = role;
+  $("loginView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+  $("userBadge").textContent = `${username} · ${role === "admin" ? "Admin" : "User"}`;
+}
 
 async function checkSession() {
   const version = authFlowVersion;
   try {
     const me = await api("me");
     if (version !== authFlowVersion) return;
-    showApp(me.username); await loadFiles(null, true);
+    showApp(me.username, me.role); await loadFiles(null, true);
   }
   catch (e) {
     if (version !== authFlowVersion) return;
@@ -284,7 +307,7 @@ $("loginForm").addEventListener("submit", async (event) => {
     const data = await api("login", { method: "POST", body: JSON.stringify({ username: $("username").value.trim(), password: $("password").value }) });
     if (version !== authFlowVersion) return;
     $("password").value = ""; $("loginMessage").textContent = "";
-    showApp(data.username); await loadFiles(null, true);
+    showApp(data.username, data.role); await loadFiles(null, true);
   } catch (e) {
     if (version === authFlowVersion) $("loginMessage").textContent = e.message;
   }
@@ -428,6 +451,15 @@ function renderFiles() {
       const rename = document.createElement("button"); rename.className = "small-action"; rename.textContent = "Ganti nama";
       rename.addEventListener("click", () => renameItem(file));
       actions.append(rename);
+      if (currentRole === "admin") {
+        const hidden = file.appProperties?.hiddenFromUser === "true";
+        const visibility = document.createElement("button");
+        visibility.className = "small-action";
+        visibility.textContent = hidden ? "Tampilkan ke user" : "Privatkan";
+        visibility.title = hidden ? "Izinkan username biasa melihat folder" : "Hanya admin yang dapat melihat folder";
+        visibility.addEventListener("click", () => toggleFolderVisibility(file));
+        actions.append(visibility);
+      }
     }
     const del = document.createElement("button"); del.className = "small-action delete-action"; del.textContent = "Hapus";
     del.addEventListener("click", () => deleteItem(file));
