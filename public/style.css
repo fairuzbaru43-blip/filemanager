@@ -161,12 +161,6 @@ button {
   align-items: center;
   min-width: 0;
 }
-.folder-tree-toggle {
-  flex: 0 0 28px;
-  padding: 7px 0;
-  background: transparent;
-  color: #748096;
-}
 .folder-tree-name {
   min-width: 0;
   flex: 1;

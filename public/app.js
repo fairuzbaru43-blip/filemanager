@@ -5,11 +5,11 @@ let allFiles = [];
 let crumbs = [];
 let sortOrder = "name-asc";
 const nameCollator = new Intl.Collator("id", { numeric: true, sensitivity: "base" });
-let folderTreeCache = new Map();
-let expandedFolderIds = new Set();
+let pinnedFolders = [];
 let authFlowVersion = 0;
 let clipboardItem = null;
 let currentRole = null;
+let currentUsername = null;
 
 async function api(path, options = {}) {
   const res = await fetch(`/api/${path}`, {
@@ -51,6 +51,10 @@ function showContextMenu(event, file = null) {
 
   if (file) {
     addContextAction(menu, "Ganti nama", () => renameItem(file));
+    if (folder) {
+      const pinned = pinnedFolders.some(item => item.id === file.id);
+      addContextAction(menu, pinned ? "Lepas sematan" : "Sematkan ke sidebar", () => togglePinnedFolder(file));
+    }
     addContextAction(menu, "Copy", () => {
       clipboardItem = { action: "copy", id: file.id, name: file.name };
       showNotice(`"${file.name}" disiapkan untuk disalin. Klik kanan lokasi tujuan lalu pilih Tempel.`);
@@ -284,14 +288,54 @@ function hasDraggedFiles(event) {
 }
 function showLogin() { $("loginView").classList.remove("hidden"); $("appView").classList.add("hidden"); }
 function showApp(username, role) {
-  if (currentRole !== role) {
-    folderTreeCache = new Map();
-    expandedFolderIds = new Set();
-  }
+  const identityChanged = currentUsername !== username || currentRole !== role;
+  currentUsername = username;
   currentRole = role;
+  if (identityChanged) {
+    pinnedFolders = loadPinnedFolders();
+  }
   $("loginView").classList.add("hidden");
   $("appView").classList.remove("hidden");
   $("userBadge").textContent = `${username} · ${role === "admin" ? "Admin" : "User"}`;
+  renderPinnedFolders();
+}
+function pinnedFoldersStorageKey() {
+  return `drivebox:pinned-folders:${encodeURIComponent(currentUsername)}:${currentRole}`;
+}
+function loadPinnedFolders() {
+  try {
+    const saved = localStorage.getItem(pinnedFoldersStorageKey());
+    if (!saved) return [];
+    const folders = JSON.parse(saved);
+    return Array.isArray(folders)
+      ? folders.filter(folder => folder && typeof folder.id === "string" && typeof folder.name === "string")
+      : [];
+  } catch (e) {
+    showNotice(`Daftar folder sematan tidak dapat dibaca: ${e.message}`, true);
+    return [];
+  }
+}
+function togglePinnedFolder(folder) {
+  const index = pinnedFolders.findIndex(item => item.id === folder.id);
+  const removedFolder = index >= 0 ? pinnedFolders[index] : null;
+  if (index >= 0) {
+    pinnedFolders.splice(index, 1);
+  } else {
+    pinnedFolders.push({
+      id: folder.id,
+      name: folder.name,
+      path: [...crumbs, { id: folder.id, name: folder.name }]
+    });
+  }
+  try {
+    localStorage.setItem(pinnedFoldersStorageKey(), JSON.stringify(pinnedFolders));
+    renderPinnedFolders();
+    showNotice(index >= 0 ? `Folder "${folder.name}" dilepas dari sematan.` : `Folder "${folder.name}" disematkan.`);
+  } catch (e) {
+    if (removedFolder) pinnedFolders.splice(index, 0, removedFolder);
+    else pinnedFolders.pop();
+    showNotice(`Gagal menyimpan folder sematan: ${e.message}`, true);
+  }
 }
 
 async function checkSession() {
@@ -394,9 +438,8 @@ async function loadFiles(parentId = null, reset = false) {
   try {
     const data = await api("files" + (parentId ? `?parentId=${encodeURIComponent(parentId)}` : ""));
     rootId = data.rootId; currentParent = parentId || rootId; allFiles = data.files || [];
-    folderTreeCache.set(currentParent, allFiles.filter(file => file.mimeType === "application/vnd.google-apps.folder"));
     if (reset || !parentId) crumbs = [{ id: rootId, name: "Semua file" }];
-    renderCrumbs(); renderFiles(); renderFolderTree();
+    renderCrumbs(); renderFiles(); renderPinnedFolders();
     return true;
   } catch (e) {
     if (/login|sesi/i.test(e.message)) {
@@ -406,76 +449,37 @@ async function loadFiles(parentId = null, reset = false) {
     return false;
   }
 }
-function renderFolderTree() {
-  const tree = $("folderTree");
-  tree.replaceChildren();
+function renderPinnedFolders() {
+  const list = $("folderTree");
+  list.replaceChildren();
   $("homeBtn").classList.toggle("active", currentParent === rootId);
-  if (!rootId) return;
-  const rootFolders = folderTreeCache.get(rootId) || [];
-  if (!rootFolders.length) {
+  if (!pinnedFolders.length) {
     const empty = document.createElement("div");
     empty.className = "folder-tree-empty";
-    empty.textContent = "Belum ada folder";
-    tree.append(empty);
+    empty.textContent = "Klik kanan folder untuk menyematkan";
+    list.append(empty);
     return;
   }
-  renderFolderBranch(rootId, [], 0, tree);
-}
-function renderFolderBranch(parentId, ancestors, depth, container) {
-  const folders = (folderTreeCache.get(parentId) || []).slice().sort((a, b) => nameCollator.compare(a.name, b.name));
-  for (const folder of folders) {
+  for (const folder of pinnedFolders.slice().sort((a, b) => nameCollator.compare(a.name, b.name))) {
     const row = document.createElement("div");
     row.className = "folder-tree-row";
-    row.style.paddingLeft = `${depth * 14}px`;
-
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "folder-tree-toggle";
-    toggle.textContent = expandedFolderIds.has(folder.id) ? "▾" : "▸";
-    toggle.setAttribute("aria-label", `${expandedFolderIds.has(folder.id) ? "Tutup" : "Buka"} folder ${folder.name}`);
-    toggle.addEventListener("click", () => toggleFolderBranch(folder));
-    row.append(toggle);
 
     const name = document.createElement("button");
     name.type = "button";
     name.className = "folder-tree-name";
     if (currentParent === folder.id) name.classList.add("selected");
-    name.textContent = folder.name;
+    name.textContent = `📌 ${folder.name}`;
     name.title = folder.name;
     name.addEventListener("click", () => {
-      expandedFolderIds.add(folder.id);
-      crumbs = [{ id: rootId, name: "Semua file" }, ...ancestors, { id: folder.id, name: folder.name }];
+      crumbs = Array.isArray(folder.path) ? folder.path : [{ id: rootId, name: "Semua file" }, folder];
       loadFiles(folder.id);
     });
     row.append(name);
-    container.append(row);
-
-    if (expandedFolderIds.has(folder.id)) {
-      const children = document.createElement("div");
-      children.className = "folder-tree-children";
-      container.append(children);
-      renderFolderBranch(folder.id, [...ancestors, { id: folder.id, name: folder.name }], depth + 1, children);
-    }
-  }
-}
-async function toggleFolderBranch(folder) {
-  if (expandedFolderIds.has(folder.id)) {
-    expandedFolderIds.delete(folder.id);
-    renderFolderTree();
-    return;
-  }
-  try {
-    if (!folderTreeCache.has(folder.id)) {
-      const data = await api(`files?parentId=${encodeURIComponent(folder.id)}`);
-      folderTreeCache.set(folder.id, (data.files || []).filter(file => file.mimeType === "application/vnd.google-apps.folder"));
-    }
-    expandedFolderIds.add(folder.id);
-    renderFolderTree();
-  } catch (e) {
-    if (/login|sesi/i.test(e.message)) {
-      showLogin();
-      $("loginMessage").textContent = e.message;
-    } else showNotice(e.message, true);
+    row.addEventListener("contextmenu", event => {
+      event.stopPropagation();
+      showContextMenu(event, { ...folder, mimeType: "application/vnd.google-apps.folder" });
+    });
+    list.append(row);
   }
 }
 function renderCrumbs() {
@@ -536,7 +540,6 @@ function renderFiles() {
     if (folder) {
       const btn = document.createElement("button"); btn.className = "folder-name"; btn.textContent = file.name;
       btn.addEventListener("click", () => {
-        expandedFolderIds.add(file.id);
         crumbs.push({ id: file.id, name: file.name });
         loadFiles(file.id);
       });
