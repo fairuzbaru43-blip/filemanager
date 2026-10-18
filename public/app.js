@@ -104,8 +104,8 @@ async function pasteClipboard(parentId) {
     showNotice(pending.action === "cut" ? "Item berhasil dipindahkan." : "Item berhasil disalin.");
   } catch (e) { showNotice(e.message, true); }
 }
-const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
-const MAX_UPLOAD_CHUNK_BYTES = 2.5 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 1024 * 1024 * 1024;
+const MAX_UPLOAD_CHUNK_BYTES = 3 * 1024 * 1024;
 function readFileAsBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -119,8 +119,8 @@ function readFileAsBase64(file) {
     reader.readAsDataURL(file);
   });
 }
-async function uploadFileToDrive(file, parentId) {
-  if (file.size > MAX_UPLOAD_BYTES) throw new Error("Ukuran maksimal 15 MB per file.");
+async function uploadFileToDrive(file, parentId, onProgress = () => {}) {
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error("Ukuran maksimal 1 GB per file.");
   if (file.size <= 3 * 1024 * 1024) {
     const data = await readFileAsBase64(file);
     await api("upload", {
@@ -147,6 +147,7 @@ async function uploadFileToDrive(file, parentId) {
   });
   for (let offset = 0; offset < file.size;) {
     const end = Math.min(offset + MAX_UPLOAD_CHUNK_BYTES, file.size);
+    onProgress(Math.floor((offset / file.size) * 100));
     const data = await readFileAsBase64(file.slice(offset, end));
     const result = await api("upload", {
       method: "POST",
@@ -160,6 +161,7 @@ async function uploadFileToDrive(file, parentId) {
       })
     });
     offset = end;
+    onProgress(Math.floor((offset / file.size) * 100));
     if (offset === file.size && !result.complete) throw new Error("Google Drive belum menyelesaikan upload.");
   }
 }
@@ -228,7 +230,9 @@ async function uploadNode(node, parentId, state) {
   state.filesProcessed += 1;
   showNotice(`Mengunggah file ${state.filesProcessed}/${state.totalFiles}: ${node.name}`);
   try {
-    await uploadFileToDrive(node.file, parentId);
+    await uploadFileToDrive(node.file, parentId, progress => {
+      showNotice(`Mengunggah ${state.filesProcessed}/${state.totalFiles}: ${node.name} (${progress}%)`);
+    });
     state.filesUploaded += 1;
   } catch (error) {
     state.failed += 1;

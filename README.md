@@ -12,7 +12,7 @@ Starter project untuk belajar HTML, CSS, JavaScript, Node.js API, login username
 - Operasi file dibatasi ke folder aplikasi dan subfoldernya.
 
 ## Batasan versi pemula
-- Upload dibatasi 15 MiB per file; file di atas 3 MiB dikirim bertahap agar sesuai dengan batas request fungsi serverless.
+- Upload dibatasi 1 GiB per file; file di atas 3 MiB dikirim bertahap agar sesuai dengan batas request fungsi serverless.
 - Satu username/password bersama untuk semua anggota; belum ada akun per anggota, peran, atau audit log.
 - Endpoint hapus memindahkan item yang diberikan ke Sampah; gunakan hanya untuk folder Drive khusus aplikasi dan jangan gunakan pada file penting.
 - Gunakan folder Drive khusus aplikasi. Jangan masukkan dokumen sensitif sebelum melakukan tinjauan keamanan.

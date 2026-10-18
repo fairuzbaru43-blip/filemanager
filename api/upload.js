@@ -3,9 +3,9 @@ const { getDrive, driveRequest, rootFolderId, ensureFolderInApp } = require("../
 const { sendDriveError } = require("../lib/drive-error-response");
 const { Readable } = require("node:stream");
 
-const MAX_BYTES = 15 * 1024 * 1024;
+const MAX_BYTES = 1024 * 1024 * 1024;
 const MAX_SINGLE_UPLOAD_BYTES = 3 * 1024 * 1024;
-const MAX_CHUNK_BYTES = 2.5 * 1024 * 1024;
+const MAX_CHUNK_BYTES = 3 * 1024 * 1024;
 const RESUMABLE_CHUNK_ALIGNMENT = 256 * 1024;
 const GOOGLE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
 
@@ -56,7 +56,7 @@ async function startResumableUpload(req, res, drive) {
       !validateParentId(parentId)) {
     return res.status(400).json({ error: "Data upload tidak valid." });
   }
-  if (size > MAX_BYTES) return res.status(413).json({ error: "Ukuran maksimal 15 MB per file." });
+  if (size > MAX_BYTES) return res.status(413).json({ error: "Ukuran maksimal 1 GB per file." });
 
   const parent = typeof parentId === "string" ? parentId : rootFolderId();
   await ensureFolderInApp(drive, parent);

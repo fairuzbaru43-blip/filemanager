@@ -44,7 +44,7 @@ async function withUploadHandler(t, drive) {
   return require("../api/upload");
 }
 
-test("resumable upload enforces 15 MiB and sends aligned chunks", async t => {
+test("resumable upload enforces 1 GiB and sends aligned chunks", async t => {
   const requests = [];
   const responses = [
     {
@@ -70,25 +70,25 @@ test("resumable upload enforces 15 MiB and sends aligned chunks", async t => {
       action: "start",
       name: "large.bin",
       mimeType: "application/octet-stream",
-      size: 15 * 1024 * 1024,
+      size: 1024 * 1024 * 1024,
       parentId: "folder-id"
     }
   }, startResponse);
   assert.equal(startResponse.statusCode, 200);
   assert.match(startResponse.body.uploadUrl, /upload_id=session/);
   assert.ok(requests[0]?.headers, JSON.stringify(requests[0]));
-  assert.equal(requests[0].headers["X-Upload-Content-Length"], String(15 * 1024 * 1024));
+  assert.equal(requests[0].headers["X-Upload-Content-Length"], String(1024 * 1024 * 1024));
 
   const tooLargeResponse = response();
   await handler({
     method: "POST",
-    body: { action: "start", name: "too-large.bin", size: 15 * 1024 * 1024 + 1 }
+    body: { action: "start", name: "too-large.bin", size: 1024 * 1024 * 1024 + 1 }
   }, tooLargeResponse);
   assert.equal(tooLargeResponse.statusCode, 413);
-  assert.match(tooLargeResponse.body.error, /15 MB/);
+  assert.match(tooLargeResponse.body.error, /1 GB/);
   assert.equal(requests.length, 1);
 
-  const firstChunk = Buffer.alloc(256 * 1024, 1);
+  const firstChunk = Buffer.alloc(3 * 1024 * 1024, 1);
   const firstResponse = response();
   await handler({
     method: "POST",
