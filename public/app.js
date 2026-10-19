@@ -11,6 +11,8 @@ let authFlowVersion = 0;
 let clipboardItem = null;
 let currentRole = null;
 let currentUsername = null;
+const INACTIVITY_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+let inactivityTimer;
 
 async function api(path, options = {}) {
   const res = await fetch(`/api/${path}`, {
@@ -22,6 +24,10 @@ async function api(path, options = {}) {
   if (!res.ok) {
     const error = new Error(data.error || `Permintaan gagal (${res.status})`);
     error.status = res.status;
+    if (res.status === 401 && path !== "login" && path !== "logout") {
+      showLogin();
+      $("loginMessage").textContent = error.message;
+    }
     throw error;
   }
   return data;
@@ -287,7 +293,13 @@ function hasDraggedFiles(event) {
   return Array.from(event.dataTransfer?.items || []).some(item => item.kind === "file") ||
     Array.from(event.dataTransfer?.types || []).includes("Files");
 }
-function showLogin() { $("loginView").classList.remove("hidden"); $("appView").classList.add("hidden"); }
+function showLogin() {
+  clearTimeout(inactivityTimer);
+  currentRole = null;
+  currentUsername = null;
+  $("loginView").classList.remove("hidden");
+  $("appView").classList.add("hidden");
+}
 function showApp(username, role) {
   const identityChanged = currentUsername !== username || currentRole !== role;
   currentUsername = username;
@@ -299,6 +311,23 @@ function showApp(username, role) {
   $("appView").classList.remove("hidden");
   $("userBadge").textContent = `${username} · ${role === "admin" ? "Admin" : "User"}`;
   renderPinnedFolders();
+  resetInactivityTimer();
+}
+function resetInactivityTimer() {
+  if (!currentRole) return;
+  clearTimeout(inactivityTimer);
+  inactivityTimer = setTimeout(async () => {
+    let logoutError;
+    try {
+      await api("logout", { method: "POST", body: "{}" });
+    } catch (error) {
+      logoutError = error;
+    }
+    showLogin();
+    $("loginMessage").textContent = logoutError
+      ? `Anda otomatis keluar setelah 2 jam tidak aktif. Sesi server tidak dapat dicabut saat ini: ${logoutError.message}`
+      : "Anda otomatis keluar setelah 2 jam tidak aktif.";
+  }, INACTIVITY_TIMEOUT_MS);
 }
 function pinnedFoldersStorageKey() {
   return `drivebox:pinned-folders:${encodeURIComponent(currentUsername)}:${currentRole}`;
@@ -428,6 +457,9 @@ document.addEventListener("click", event => {
   if (!$("contextMenu").contains(event.target)) hideContextMenu();
 });
 document.addEventListener("keydown", event => { if (event.key === "Escape") hideContextMenu(); });
+for (const eventName of ["pointerdown", "keydown", "scroll", "touchstart", "mousemove"]) {
+  document.addEventListener(eventName, resetInactivityTimer, { passive: true });
+}
 
 async function loadFiles(parentId = null, reset = false) {
   clearNotice();

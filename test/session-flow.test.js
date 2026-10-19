@@ -27,13 +27,23 @@ test("login session survives page loads and is revoked by logout", async () => {
   const originalEnvironment = Object.fromEntries(environmentNames.map(name => [name, process.env[name]]));
   const originalFromEnv = Redis.fromEnv;
   const sessionStore = new Map();
+  const renewedSessionTtls = [];
   const redis = {
-    async set(key, value) { sessionStore.set(key, value); return "OK"; },
+    async set(key, value, options) {
+      assert.equal(options.ex, 7200);
+      sessionStore.set(key, value);
+      return "OK";
+    },
     async get(key) {
       const value = sessionStore.get(key);
       if (value === undefined) return null;
       // Upstash's default response parser turns the stored string "1" into number 1.
       try { return JSON.parse(value); } catch { return value; }
+    },
+    async expire(key, seconds) {
+      if (!sessionStore.has(key)) return 0;
+      renewedSessionTtls.push(seconds);
+      return 1;
     },
     async del(key) { return sessionStore.delete(key) ? 1 : 0; }
   };
@@ -116,6 +126,7 @@ test("login session survives page loads and is revoked by logout", async () => {
       assert.deepEqual(meResponse.body, { username: "test-admin", role: "admin" });
       assert.equal(meResponse.headers["Cache-Control"], "no-store");
     }
+    assert.deepEqual(renewedSessionTtls, [7200, 7200, 7200]);
 
     const dashboardResponse = response();
     await filesHandler({ method: "GET", headers: { cookie: cookiePair }, socket: {}, query: {} }, dashboardResponse);

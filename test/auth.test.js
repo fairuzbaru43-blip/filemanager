@@ -68,6 +68,11 @@ test("auth configuration reports missing names and Redis sessions revoke logout 
         // Match @upstash/redis default JSON response parsing (GET "1" => number 1).
         try { return JSON.parse(value); } catch { return value; }
       },
+      async expire(key, seconds) {
+        assert.equal(sessions.has(key), true);
+        assert.equal(seconds, 2 * 60 * 60);
+        return 1;
+      },
       async del(key) { return sessions.delete(key) ? 1 : 0; }
     });
 
